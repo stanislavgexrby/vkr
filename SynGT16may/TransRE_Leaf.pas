@@ -1,0 +1,78 @@
+unit TransRE_Leaf;
+
+interface
+uses
+  TransRE_Tree, TransTransformation, Minimization;
+type
+  TRE_Leaf = class(TRE_Tree)
+  protected
+    { Protected declarations }
+  public
+    { Public declarations }
+
+    {substitute one tree to another (now used only for Nonteminals as aTree)}
+    procedure substituteAll(aTree: TRE_Tree; newTree: TRE_Tree);override;
+
+    {contain subtree (now used only for Leafs)}
+    function contain(aTree:TRE_Tree):boolean;override;
+
+    {String representation of the Tree with substituded AuxilaryNotions}
+    function getSubstitutedString():string;override;
+
+    function getOperationCount():integer;override;
+
+    {right recursion elimination}
+    function rightEl(aLeaf:TRE_Tree):TRightTransformation;override;
+
+    procedure buildMinimizationTable(var table:TMinimizationTable; minRec:TMinRecord);override;
+  end;
+
+implementation
+uses
+  TransCreator;
+
+function TRE_Leaf.contain(aTree :TRE_Tree):boolean;
+begin
+  result:=equals(aTree);
+end;
+
+function TRE_Leaf.rightEl(aLeaf:TRE_Tree):TRightTransformation;
+begin
+  if (equals(aLeaf)) then begin
+    result.E:=false;
+    result.RA:=createEmptyTerminal(Owner);
+    result.RB:=nil;
+  end else if (isEmpty()) then begin
+    result.E:=true;
+    result.RA:=nil;
+    result.RB:=nil;
+  end else begin
+    result.E:=false;
+    result.RA:=nil;
+    result.RB:=self;
+  end;
+end;
+
+function TRE_Leaf.getSubstitutedString():string;
+begin
+  result:=getString();
+end;
+
+function TRE_Leaf.getOperationCount():integer;
+begin
+  result:=1;
+end;
+
+procedure TRE_Leaf.substituteAll(aTree: TRE_Tree; newTree: TRE_Tree);
+begin
+end;
+
+procedure TRE_Leaf.buildMinimizationTable(var table:TMinimizationTable; minRec:TMinRecord);
+var
+  a: string;
+begin
+  a := getString;
+  table.linkStates(minRec.start, minRec.finish, a);
+end;
+
+end.

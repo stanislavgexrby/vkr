@@ -1,0 +1,19 @@
+UNIT Main;
+-----------------------------------
+TMainForm: new button SpeedButtonSaveAs;
+TMainForm: menu item FileCloseItem;
+TMainForm.EnableMenuItems;
+TMainForm.DisableMenuItems;
+new procedure TMainForm.FileCloseItemClick;
+TMainForm.ActionImportFromSyntaxExecute;
+TMainForm.ActionImportFromGEditExecute;
+
+UNIT Child;
+-----------------------------------
+TChildForm properties
+
+UNIT TransGrammar;
+-----------------------------------
+TGrammar.leftEl();
+TGrammar.rightEl();
+TGrammar.printSubstituted;

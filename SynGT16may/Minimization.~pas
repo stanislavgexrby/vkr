@@ -1,0 +1,417 @@
+unit Minimization;
+
+interface
+
+uses classes;
+
+type
+   TSymbol = string;
+   TState = string;
+
+const
+   EmptySymbol: TSymbol = '';
+   StartState: TState = '0';
+   FinalState: TState = 'X';
+
+type
+   ByteSet = set of byte;
+   TStatesSet = class
+   public
+      constructor Create(MaxStatesCount: integer);
+
+      function findState(stateIndex: integer): boolean;
+      procedure addState(stateIndex: integer);
+
+      function Count: integer;
+      function getDataSet: ByteSet;
+      procedure setDataSet(adata: ByteSet);
+   private
+      data: ByteSet;
+   end;
+
+   TMinimizationTable = class
+   public
+      constructor Create(MaxStatesCount, MaxSymbolsCount: integer);
+      destructor Dispose;
+
+      function createState(): TState;
+      procedure linkStates(a, b: TState; s: TSymbol);
+      procedure minimize;
+
+      {Методы доступа к таблице}
+      function isEmptyState(stateIndex: integer): boolean;
+
+      function getStatesCount: integer;
+      function getSymbolsCount: integer;
+
+      function getStateName(index: integer): string;
+      function getSymbol(index: integer): string;
+
+      function getTableElement(stateIndex, symbolIndex: integer): TStatesSet;            
+
+      procedure WriteToFile(filename: string);
+
+   protected
+      procedure addState(startStateIndex, symbolIndex: integer; endStateIndex: integer);
+      function findState(state: TState): integer;
+      function findSymbol(symbol: TSymbol): integer;
+
+      function AddNewSymbol(s: TSymbol): integer;
+      function AddNewState(s: TState): integer;
+        
+      function CanJoin2Rows(row1,row2: integer): boolean;
+      procedure Join2Rows(row1,row2: integer);
+      procedure replaceState(oldState: integer; newState: integer);
+   private
+      data: array of array of TStatesSet;
+      states: array of TState;
+      symbols: array of TSymbol;
+      nextState: TState;
+      emptyStatesSet: TStatesSet;
+      statesCount, symbolsCount: integer;
+   end;
+
+implementation
+
+uses SysUtils;
+
+constructor TStatesSet.Create(MaxStatesCount: integer);
+begin
+   inherited Create;
+   assert(MaxStatesCount <= 256, 'Can not deal with more than 256 states');
+end;
+
+function TStatesSet.findState(stateIndex: integer): boolean;
+begin
+  assert((stateIndex >=0) and (stateIndex <=256));
+  result := stateIndex in data;
+end;
+
+procedure TStatesSet.addState(stateIndex: integer);
+begin
+  assert((stateIndex >=0) and (stateIndex <=256));
+  data := data + [stateIndex];
+end;
+
+function TStatesSet.Count: integer;
+begin
+  result := 256;
+end;
+
+function TStatesSet.getDataSet: ByteSet;
+begin
+  result := data;
+end;
+
+procedure TStatesSet.setDataSet(adata: ByteSet);
+begin
+  data := adata;
+end;
+
+procedure TMinimizationTable.WriteToFile(filename: string);
+const
+  width = 10;
+var
+  f: textfile;
+  i,j,k: integer;
+  s: string;
+begin
+  Assign(f, filename);
+  Rewrite(f);
+
+  Write(f, '':width);
+  
+  for j:=0 to symbolsCount-1 do
+  begin
+    s := '''' + symbols[j] + '''' + ' '; 
+    Write(f, s:width);
+  end;
+  WriteLn(f);
+
+  for i:=0 to statesCount-1 do
+  if not emptyStatesSet.findState(i) then
+  begin
+    s := states[i] + ' ';
+    Write(f, s:width);
+    for j:=0 to symbolsCount-1 do
+    begin
+      s := '';
+      if data[i,j] <> nil then
+      begin
+          for k:=0 to data[i,j].Count-1 do
+          if data[i,j].findState(k) then
+          begin
+            s := s + states[k] + ' ';
+          end;
+      end;
+      Write(f,s:width);
+    end;
+    WriteLn(f);
+  end;
+
+  Close(f);
+end;
+
+function TMinimizationTable.AddNewState(s: TState): integer;
+var
+  newIndex: integer;
+begin
+  newIndex := statesCount;
+  states[newIndex] := s;
+  Inc(statesCount);
+  result := newIndex;
+end;
+
+function TMinimizationTable.AddNewSymbol(s: TSymbol): integer;
+var
+  newIndex: integer;
+begin
+  newIndex := symbolsCount;
+  symbols[newIndex] := s;
+  Inc(symbolsCount);
+  result := newIndex;
+end;
+
+function findElement(var ar: array of string; el: string): integer;
+var
+  i: integer;
+begin
+  result := -1;
+
+  for i:=0 to High(ar) do
+    if ar[i] = el then
+    begin
+      result := i;
+      break;
+    end;
+end;
+
+function TMinimizationTable.findState(state: TState): integer;
+begin
+  result := findElement(states, state);
+  if result = -1 then
+    result := addNewState(state);
+end;
+
+function TMinimizationTable.findSymbol(symbol: TSymbol): integer;
+begin
+  result := findElement(symbols, symbol);
+  if result = -1 then
+    result := addNewSymbol(symbol);
+end;
+
+constructor TMinimizationTable.Create(MaxStatesCount, MaxSymbolsCount: integer);
+var
+  i,j: integer;
+begin
+  inherited Create;
+  
+  SetLength(data, MaxStatesCount, MaxSymbolsCount);
+  SetLength(states, MaxStatesCount);
+  SetLength(symbols, MaxSymbolsCount);
+
+  statesCount := 0;
+  symbolsCount := 0;
+
+  addNewState(StartState);
+  //addNewState(FinalState);
+  addNewSymbol(EmptySymbol);
+
+  for i:=Low(data) to High(data) do
+     for j:=Low(data[i]) to High(data[i]) do
+       data[i,j] := nil;
+
+  nextState := '1';
+
+  emptyStatesSet := TStatesSet.Create(256);
+end;
+
+destructor TMinimizationTable.Dispose;
+begin
+  SetLength(data, 0, 0);
+  SetLength(states, 0);
+  SetLength(symbols, 0);
+end;
+
+function TMinimizationTable.createState(): TState;
+var
+  inextState: integer;
+begin
+  //TODO: emptyStatesSet.
+  inextState := StrToInt(nextState);
+  result := nextState;
+  nextState := IntToStr(inextState + 1);
+end;
+
+procedure TMinimizationTable.addState(startStateIndex, symbolIndex: integer; endStateIndex: integer);
+var
+  list: TStatesSet;
+begin
+  if data[startStateIndex,symbolIndex] = nil then
+     data[startStateIndex,symbolIndex] := TStatesSet.Create(256);
+
+  data[startStateIndex,symbolIndex].addState(endStateIndex);
+end;
+
+procedure TMinimizationTable.linkStates(a, b: TState; s: TSymbol);
+var
+  ai, bi, si: integer;
+begin
+  ai := findState(a);
+  bi := findState(b);
+  si := findSymbol(s);
+
+  addState(ai, si, bi);
+end;
+
+function TMinimizationTable.CanJoin2Rows(row1,row2: integer): boolean;
+var
+  k: integer;
+  s1,s2: ByteSet;
+begin
+  result := false;
+
+  if emptyStatesSet.findState(row1) or emptyStatesSet.findState(row2) then
+     Exit;
+
+  if (states[row1] = FinalState) or (states[row2] = FinalState) then
+     Exit;
+
+  for k:=0 to symbolsCount-1 do
+  begin
+    if (data[row1,k]<>nil) and (data[row2,k]<>nil) then
+    begin
+       s1 := data[row1,k].getDataSet;
+       s2 := data[row2,k].getDataSet;
+       if (s1 - s2 - [row1, row2] <> []) or (s2 - s1 - [row1, row2] <> []) then
+          Exit;
+    end else
+    if (data[row1,k]=nil) and (data[row2,k]=nil) then
+    begin
+      // do nothing;
+    end else
+        Exit;         
+  end;
+  result := true;
+end;
+
+procedure TMinimizationTable.replaceState(oldState: integer; newState: integer);
+var
+  i,j: integer;
+  ds: ByteSet;
+begin
+  states[newState] := states[newState] + '#' + states[oldState];
+  states[oldState] := 'nil'; 
+  for i:=0 to statesCount-1 do
+  if not emptyStatesSet.findState(i) then
+  begin
+     for j:=0 to symbolsCount-1 do
+        if data[i,j] <> nil then
+           if data[i,j].findState(oldState) then
+             data[i,j].setDataSet( data[i,j].getDataSet - [oldState] + [newState] );
+  end;
+end;
+
+procedure TMinimizationTable.Join2Rows(row1,row2: integer);
+var
+  k: integer;
+  s1,s2: ByteSet;
+begin
+  //newState := row1;
+  for k:=0 to symbolsCount-1 do
+  begin
+    if (data[row1,k]<>nil) and (data[row2,k]<>nil) then
+    begin
+       s1 := data[row1,k].getDataSet;
+       s2 := data[row2,k].getDataSet;
+
+       data[row1,k].SetDataSet(s1 + s2 - [row2]);
+       data[row2,k] := nil;
+
+       emptyStatesSet.addState(row2);
+       replaceState(row2, row1);
+    end else
+    if (data[row1,k]=nil) and (data[row2,k]=nil) then
+    begin
+      // do nothing;
+    end else
+    begin
+      assert(false, 'Can not join these rows');
+    end;
+  end;
+end;
+
+procedure TMinimizationTable.minimize;
+var
+  i,j: integer;
+label
+  startLoop;
+begin
+  repeat
+    startLoop:
+    for i:=0 to statesCount-1 do
+      for j:=i+1 to statesCount-1 do
+        if CanJoin2Rows(i,j) then
+        begin
+           Join2Rows(i,j);
+           goto startLoop;
+        end
+  until true;
+end;
+
+function TMinimizationTable.isEmptyState(stateIndex: integer): boolean;
+begin
+  result := emptyStatesSet.findState(stateIndex);
+end;
+
+function TMinimizationTable.getStatesCount: integer;
+begin
+  result := statesCount;
+end;
+
+function TMinimizationTable.getSymbolsCount: integer;
+begin
+  result := symbolsCount;
+end;
+
+function TMinimizationTable.getStateName(index: integer): string;
+begin
+  result := states[index];
+end;
+
+function TMinimizationTable.getSymbol(index: integer): string;
+begin
+  result := symbols[index];
+end;
+
+function TMinimizationTable.getTableElement(stateIndex, symbolIndex: integer): TStatesSet;
+begin
+  result := data[stateIndex, symbolIndex];
+end;
+
+end.
+
+
+{
+function TMinimizationTable.CanJoinRows(rows: ByteSet): boolean;
+var
+  i,j: integer;
+  row: array of ByteSet;
+begin
+  result := true;
+
+  SetLength(row, symbolsCount);
+  for j:=0 to symbolsCount-1 do
+    row[j] := [];
+
+  for i:=0 to statesCount-1 do
+  begin
+    for j:=0 to symbolsCount-1 do
+
+  end
+end;
+
+procedure TMinimizationTable.JoinRows(rows: ByteSet);
+begin
+end;}
+

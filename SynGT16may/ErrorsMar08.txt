@@ -1,0 +1,7 @@
+Error in minimization:
+''#'+';''#'+','*'.
+'d'#('';'d').
+
+
+Error in right recursion elimination:
+'a','b';'c',S.

@@ -1,0 +1,22 @@
+new UNIT+Form Analyzer;
+-----------------------------------
+
+UNIT Main;
+-----------------------------------
+new uses Analyzer;
+<some interface corrections>
+new procedure TMainForm.SpeedButtonAnalyzeClick;
+procedure TMainForm.CreateMDIChild;
+procedure TMainForm.EditUndo;
+procedure TMainForm.EditRedoItemClick;
+
+UNIT Child;
+-----------------------------------
+new uses Analyzer;
+new Function GetSelMas;
+procedure TChildForm.BuildButtonClick;
+procedure TChildForm.BuildButtonClick;
+
+-----------------------------------
+UNIT UndoRedo;
+-----------------------------------

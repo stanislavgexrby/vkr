@@ -1,0 +1,17 @@
+new UNIT UndoRedo;
+-----------------------------------
+
+UNIT Child;
+-----------------------------------
+new uses UndoRedo;
+new property TChildForm.UndoRedo;
+procedure TChildForm.FormCreate;
+procedure TChildForm.BuildButtonClick;
+procedure TChildForm.FormClose;
+
+UNIT Main;
+-----------------------------------
+<some interface corrections>
+procedure TMainForm.CreateMDIChild;
+procedure TMainForm.EditUndo;
+new procedure TMainForm.EditRedoItemClick;

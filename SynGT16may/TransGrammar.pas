@@ -1,0 +1,444 @@
+unit TransGrammar;
+
+interface
+uses
+  classes, TransNonterminal, TransTerminal, TransLeaf, dialogs;
+type
+  TGrammar=class;
+
+  TLeafList = class(TComponent)
+  protected
+    m_Grammar:TGrammar;
+    m_list:TStringList;
+  public
+    {owner should be TGrammar}
+    constructor Create(aGrammar:TGrammar);virtual;
+    {finds index by Name}
+    function find(aName:String): integer;
+    {add Object}
+    function add(aLeaf:TLeaf): integer;
+    {return number of objects in list}
+    function getCount(): integer;
+  end;
+  TNonterminalList = class(TLeafList)
+  private
+    function getNonterminalById(index:integer): TNonterminal;
+  public
+    property Nonterminals[Index: Integer]: TNonterminal read GetNonterminalById;
+  end;
+
+  TTerminalList = class(TLeafList)
+  private
+    function getTerminalById(index:integer): TTerminal;
+  public
+    property Terminals[Index: Integer]: TTerminal read GetTerminalById;
+  end;
+
+  TGrammar = class(TComponent)
+  private
+    m_Nonterminals:TNonterminalList;
+    m_Terminals:TTerminalList;
+{todo:   m_Semantics:TSemantisList;}
+  public
+    constructor load(aOwner:TComponent; filename:string);
+    constructor loadFromStr(aOwner:TComponent; srcstr:string);
+    {For debug}
+    procedure println();
+    {For debug}
+    function printSubstituted(name: string):string;
+    {For debug left recursion elimination}
+    procedure leftEl();
+    {For debug right recursion elimination}
+    procedure rightEl();
+    {Regularize grammar}
+    procedure regularize();
+
+    procedure minimize;
+
+    function getNonterminal(aName:string):TNonterminal;
+    function getTerminal(aName:string):TTerminal;
+    function addNonterminal(aName:string):TNonterminal;
+    function addTerminal(aName:string):TTerminal;
+  end;
+
+var
+  DefaultGrammar:TGrammar;
+implementation
+
+uses
+  Main, TransCharProducer, SysUtils, TransParser, TransParser2,
+  TransRE_Nonterminal, TransRE_Tree, TransCreator, Minimization, DugaAutomat;
+
+constructor TLeafList.Create(aGrammar:TGrammar);
+begin
+  inherited Create(aGrammar);
+  m_Grammar:=aGrammar;
+  m_List:=TStringList.Create();
+end;
+
+function TLeafList.find(aName:String): integer;
+begin
+  result:=m_List.IndexOf(aName);
+end;
+
+function TLeafList.add(aLeaf:TLeaf): integer;
+begin
+  result:=m_List.add(aLeaf.getName);
+  m_List.Objects[result]:=aLeaf;
+end;
+
+function TLeafList.getCount(): integer;
+begin
+  result:=m_List.Count;
+end;
+
+function TNonterminalList.getNonterminalById(index:integer): TNonterminal;
+begin
+  result:=TNonterminal(m_List.Objects[index]);
+end;
+
+function TTerminalList.getTerminalById(index:integer): TTerminal;
+begin
+  result:=TTerminal(m_List.Objects[index]);
+end;
+
+constructor TGrammar.loadFromStr(aOwner:TComponent; srcstr:string);
+var
+  CharProducer:TStringCharProducer;
+  str:string;
+  nonterminal:TNonterminal;
+begin
+  inherited Create(aOwner);
+  m_Nonterminals:=TNonterminalList.Create(self);
+  m_Terminals:=TTerminalList.Create(self);
+  addTerminal('');
+  CharProducer:=TStringCharProducer.make(srcstr);
+  str:={UpperCase}(readIdentifier(CharProducer));
+  while true {()not (str='EOGRAM')} do begin
+    if not(CharProducer.next) then break;//skip ':'
+    nonterminal:=addNonterminal(str);
+    nonterminal.Tree:=RE_FromCharProducer2(CharProducer,Self);
+    if not(CharProducer.next) then break;//skip '.'
+    str:={UpperCase}(readIdentifier(CharProducer));
+  end;
+  CharProducer.destroy;
+end;
+
+constructor TGrammar.load(aOwner:TComponent; filename:string);
+var
+  CharProducer:TFileCharProducer;
+  str:string;
+  nonterminal:TNonterminal;
+begin
+  inherited Create(aOwner);
+  m_Nonterminals:=TNonterminalList.Create(self);
+  m_Terminals:=TTerminalList.Create(self);
+  addTerminal('');
+  CharProducer:=TFileCharProducer.make(FileName);
+  str:={UpperCase}(readIdentifier(CharProducer));
+  while not (str='EOGRAM') do begin
+    if not(CharProducer.next) then break;//skip ':'
+    nonterminal:=addNonterminal(str);
+    nonterminal.Tree:=RE_FromCharProducer2(CharProducer,Self);
+    if not(CharProducer.next) then break;//skip '.'
+    str:={UpperCase}(readIdentifier(CharProducer));
+  end;
+  CharProducer.destroy;
+end;
+
+function TGrammar.getNonterminal(aName:string):TNonterminal;
+begin
+  result:=m_Nonterminals.getNonterminalById(m_Nonterminals.find(aName));
+end;
+
+function TGrammar.getTerminal(aName:string):TTerminal;
+begin
+  result:=m_Terminals.getTerminalById(m_Terminals.find(aName));
+end;
+
+function TGrammar.addNonterminal(aName:string):TNonterminal;
+var
+  index:integer;
+begin
+  index:=m_Nonterminals.find(aName);
+  if (index>=0) then begin
+    result:=m_Nonterminals.getNonterminalById(index);
+  end else begin
+    result:=TNonterminal.Create(self, aName);
+    m_Nonterminals.add(result);
+  end;
+end;
+
+function TGrammar.addTerminal(aName:string):TTerminal;
+var
+  index:integer;
+begin
+  index:=m_Terminals.find(aName);
+  if (index>=0) then begin
+    result:=m_Terminals.getTerminalById(index);
+  end else begin
+    result:=TTerminal.Create(self, aName);
+    m_Terminals.add(result);
+  end;
+end;
+
+procedure TGrammar.println();
+var
+  i:integer;
+  nonterm:TNonterminal;
+begin
+  MainForm.println('Grammar print');
+  MainForm.println('terminals >>>');
+  for i:=0 to m_Terminals.getCount-1 do begin
+    MainForm.println(m_Terminals.getTerminalById(i).getName);
+  end;
+  MainForm.println('nonterminals >>>');
+  for i:=0 to m_Nonterminals.getCount-1 do begin
+    nonterm:=m_Nonterminals.getNonterminalById(i);
+    if (nonterm.AuxilaryNotion) then begin
+      MainForm.print('!');
+    end;
+    MainForm.println(nonterm.getName+':'+nonterm.getTree.getString());
+  end;
+end;
+
+function TGrammar.printSubstituted(name: string): string;
+var
+  i:integer;
+  nonterm:TNonterminal;
+  idx: integer;
+begin
+  MainForm.println('Grammar print');
+  MainForm.println('terminals >>>');
+  for i:=0 to m_Terminals.getCount-1 do
+    begin
+    MainForm.println(m_Terminals.getTerminalById(i).getName);
+    end;
+
+  idx:=0;
+  for i:=0 to m_Nonterminals.getCount-1 do
+     if m_Nonterminals.getNonterminalById(i).getName=name then idx:=i;
+
+//  MainForm.println('nonterminals >>>');
+//  for i:=0 to m_Nonterminals.getCount-1 do
+//  i:=0;
+  try
+    nonterm:=m_Nonterminals.getNonterminalById(idx);
+    if (not nonterm.AuxilaryNotion) then
+      begin
+      //MainForm.println(nonterm.getName+':'+nonterm.getTree.getSubstitutedString());
+      if nonterm.getTree=nil
+//         then Result:=nonterm.getName+':'''''    // 21.04.2004: It was like that
+         then raise ECantTransformateException.create(' Can''t eliminate left recursion')  // 21.04.2004: If getTree=nil then NonTerminal is incorrect!!!
+         else begin
+                Result:=nonterm.getName+':';
+                Result:=Result+nonterm.getTree.getString(); //getSubstitutedString();
+         end
+      end;
+  except
+        ShowMessage('Error');
+        //Result := '';
+  end;
+end;
+
+procedure TGrammar.leftEl();
+var
+  i:integer;
+  nonterm:TNonterminal;
+  RE_Nonterm:TRE_Nonterminal;
+  tr:TTransformation;
+  newRoot:TRE_Tree;
+begin
+  MainForm.println('Grammar print');
+  MainForm.println('nonterminals >>>');
+  for i:=0 to m_Nonterminals.getCount-1 do
+  begin
+    nonterm:=m_Nonterminals.getNonterminalById(i);
+      if nonterm<>nil then
+      begin
+        MainForm.println(nonterm.getName);
+        RE_Nonterm:=TRE_Nonterminal.Create(self,nonterm);
+        tr:=nonterm.getTree().leftEl(RE_Nonterm);
+        if (nil = tr.R1) then begin
+          MainForm.println('R1: nil');
+        end else begin
+          MainForm.println('R1: '+tr.R1.getString());
+        end;
+        if (nil = tr.R2) then begin
+          MainForm.println('R2: nil');
+        end else begin
+          MainForm.println('R2: '+tr.R2.getString());
+        end;
+        if (tr.E) then begin
+          MainForm.println('E:true');
+        end else begin
+          MainForm.println('E:false');
+        end;
+
+        newRoot := createAndAlt(self, tr.R2, createUnaryIteration(self, tr.R1));
+
+        if (tr.E)and(tr.R2<>nil) then
+          newRoot := createOrEmpty(self, newRoot);
+        if newRoot=nil
+           then MainForm.println('Result NT: nil')
+           else MainForm.println('Result NT: '+newRoot.getString());
+        nonterm.AuxilaryNotion:=false;
+        nonterm.setTree(newRoot);
+
+        //TODO: Debug this
+       { for j := 0 to m_Nonterminals.getCount-1 do
+          begin
+          nonterm:=m_Nonterminals.getNonterminalById(j);
+          nonterm.substituteAll(RE_Nonterm, newRoot);
+          end;}
+
+      end;   // if nonterm<>nil
+  end;   // for
+end;  // proc
+
+
+
+procedure TGrammar.rightEl();
+var i:integer;
+    nonterm:TNonterminal;
+    RE_Nonterm:TRE_Nonterminal;
+    tr:TRightTransformation;
+    newRoot:TRE_Tree;
+begin
+MainForm.println('Grammar print');
+MainForm.println('nonterminals >>>');
+for i:=0 to m_Nonterminals.getCount-1 do
+    begin
+    nonterm:=m_Nonterminals.getNonterminalById(i);
+    if nonterm<>nil then
+        begin
+        MainForm.println(nonterm.getName);
+        RE_Nonterm:=TRE_Nonterminal.Create(self,nonterm);
+        tr:=nonterm.getTree().rightEl(RE_Nonterm);
+        if (nil = tr.RA) then begin
+                              MainForm.println('RA: nil');
+                              end
+                         else begin
+                              MainForm.println('RA: '+tr.RA.getString());
+                              end;
+        if (nil = tr.RB) then begin
+                              MainForm.println('RB: nil');
+                              end
+                         else begin
+                              MainForm.println('RB: '+tr.RB.getString());
+                              end;
+        if (tr.E) then begin
+                       MainForm.println('E:true');
+                       end
+                  else begin
+                       MainForm.println('E:false');
+                       end;
+
+        newRoot := createAndAlt(self, tr.RB, createUnaryIteration(self, tr.RA));
+        if (tr.E)and((tr.RA<>nil)and(tr.RB<>nil)) then
+           newRoot := createOrEmpty(self, newRoot);
+        if newRoot=nil
+           then MainForm.println('Result NT: nil')
+           else MainForm.println('Result NT: '+newRoot.getString());
+        nonterm.AuxilaryNotion:=false;
+        nonterm.setTree(newRoot);
+        end;   // if nonterm<>nil
+    end;   // for
+end;  // proc
+
+procedure TGrammar.regularize();
+  function rightElimenation(aTree:TRE_Tree; aNonterminal:TRE_Nonterminal):TRightTransformation;
+  begin
+    if (nil = aTree) then begin
+      MainForm.println('nil');
+      result.E := false;
+      result.RA := nil;
+      result.RB := nil
+    end else begin
+      MainForm.println(aTree.getString());
+      result:=aTree.rightEl(aNonterminal);
+    end;
+    if (nil = result.RA) then begin
+      MainForm.println('RA: nil');
+    end else begin
+      MainForm.println('RA: '+result.RA.getString());
+    end;
+    if (nil = result.RB) then begin
+      MainForm.println('RB: nil');
+    end else begin
+      MainForm.println('RB: '+result.RB.getString());
+    end;
+  end;
+var
+  i:integer;
+  nonterm:TNonterminal;
+  RE_Nonterm:TRE_Nonterminal;
+  newRoot:TRE_Tree;
+  tr:TTransformation;
+  RightT_R1, RightT_R2 : TRightTransformation;
+begin
+  MainForm.println('Grammar print');
+  MainForm.println('nonterminals >>>');
+  for i:=(m_Nonterminals.getCount()-1) downto 0 do
+    begin
+    nonterm:=m_Nonterminals.getNonterminalById(i);
+    MainForm.println(nonterm.getName);
+    RE_Nonterm:=TRE_Nonterminal.Create(self,nonterm);
+    tr:=nonterm.getTree().leftEl(RE_Nonterm);
+      if (tr.E) then begin
+                     MainForm.println('E:true');
+                     end
+                else begin
+                     MainForm.println('E:false');
+                     end;
+      MainForm.print('R1: ');
+      RightT_R1 :=rightElimenation(tr.R1, RE_Nonterm);
+      MainForm.print('R2: ');
+      RightT_R2 :=rightElimenation(tr.R2, RE_Nonterm);
+
+      newRoot := createAnd(self, createAnd(self, createUnaryIteration(self, RightT_R2.RA),
+                   RightT_R2.RB), createUnaryIteration(self, RightT_R1.RB));
+
+      if (tr.E) then
+        newRoot := createOrEmpty(self, newRoot);
+      newRoot := createIteration(self, newRoot, RightT_R1.RA);
+      MainForm.println('Result AN : '+newRoot.getString());
+      nonterm.setTree(newRoot);
+    end;  // for
+end;  // proc
+
+procedure TGrammar.minimize;
+var
+  i:integer;
+  nonterm:TNonterminal;
+  minTable: TMinimizationTable;
+  minExpression: TDugaAutomat;
+  minRec: TMinRecord;
+begin
+  for i:=0 to m_Nonterminals.getCount()-1 do
+  begin
+    nonterm:=m_Nonterminals.getNonterminalById(i);
+
+    minTable := TMinimizationTable.Create(256, 256);
+
+    minRec.start := Minimization.StartState;
+    minRec.finish := Minimization.FinalState;
+
+    nonterm.getTree.buildMinimizationTable(minTable, minRec);
+
+    CreateDir('debug');
+
+    minTable.WriteToFile('debug\table-' + nonterm.getName + '.txt');
+
+    minTable.minimize;
+
+    minTable.WriteToFile('debug\min-table-' + nonterm.getName + '.txt');
+
+    minExpression := TDugaAutomat.make(Self, minTable);
+    nonterm.setTree(minExpression.getRegularExpression());
+    minExpression.Destroy();
+    minTable.Destroy;
+  end;
+end;
+
+end.

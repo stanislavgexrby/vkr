@@ -1,0 +1,12 @@
+6apr:
+
+TransCreator.pas:
+
+new     
+        function createAndAlt(aGrammar:TComponent; aLeft, aRight:TRE_Tree):TRE_Tree;
+
+TransGrammar.pas:
+
+changed 
+         if (tr.E)and((tr.R1<>nil)and(tr.R2<>nil)) then
+                newRoot := createOrEmpty(self, newRoot);

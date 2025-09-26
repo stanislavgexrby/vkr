@@ -1,0 +1,28 @@
+UNIT TransGrammar;
+-----------------------------------
+TGrammar.printSubstituted;
+
+UNIT Main;
+-----------------------------------
+<some interface corrections with Form>
+new button SpeedButton8;
+new procedure TMainForm.SpeedButton8Click(Sender: TObject);
+
+UNIT Child;
+-----------------------------------
+<some interface corrections with Form>
+new Procedure TChildForm.Substitute;
+Procedure TChildForm.SetActiveNonTerminal(index:Integer);
+
+UNIT RegularExpression;
+-----------------------------------
+new type TSelMas;
+new property TRE_Tree.DrawObj;
+new property TNTListItem.DrawObj;
+function TRE_Terminal.DrawObjectsToRight;
+function TRE_Macro.DrawObjectsToRight;
+function TRE_BinaryOperation.toString;
+function TRE_Leaf.toString;
+function TRE_Terminal.toString;
+function TRE_Macro.toString;
+procedure TNTListItem.setStringFromRoot;

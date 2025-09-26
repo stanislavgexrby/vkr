@@ -1,0 +1,54 @@
+program SynGT;
+
+uses
+  Forms,
+  Main in 'MAIN.PAS' {MainForm},
+  Child in 'Child.pas' {ChildForm},
+  RegularExpression in 'RegularExpression.pas',
+  DrawObject in 'DrawObject.pas',
+  Arrow in 'Arrow.pas',
+  Ward in 'Ward.pas',
+  DrawPoint in 'DrawPoint.pas',
+  Parser2 in 'Parser2.pas',
+  Semantic in 'Semantic.pas',
+  Creator in 'Creator.pas',
+  AddDialog in 'AddDialog.pas' {AddDialogForm},
+  PrintForm in 'PrintForm.pas' {BitmapPrintForm},
+  CharProducer in 'CharProducer.pas',
+  ErrorUnit in 'ErrorUnit.pas',
+  Dictionary in 'Dictionary.pas',
+  ChangeSize in 'ChangeSize.pas' {ChangeSizeForm},
+  Parser in 'Parser.pas',
+  TransRE_Semantic in 'TransRE_Semantic.pas',
+  TransCharProducer in 'TransCharProducer.pas',
+  TransCreator in 'TransCreator.pas',
+  TransErrorUnit in 'TransErrorUnit.pas',
+  TransGrammar in 'TransGrammar.pas',
+  TransLeaf in 'TransLeaf.pas',
+  TransNonterminal in 'TransNonterminal.pas',
+  TransParser in 'TransParser.pas',
+  TransParser2 in 'TransParser2.pas',
+  TransRE_And in 'TransRE_And.pas',
+  TransRE_BinaryOperation in 'TransRE_BinaryOperation.pas',
+  TransRE_Iteration in 'TransRE_Iteration.pas',
+  TransRE_Leaf in 'TransRE_Leaf.pas',
+  TransRE_Nonterminal in 'TransRE_Nonterminal.pas',
+  TransRE_Or in 'TransRE_Or.pas',
+  TransRE_Terminal in 'TransRE_Terminal.pas',
+  TransRE_Tree in 'TransRE_Tree.pas',
+  TransSemantic in 'TransSemantic.pas',
+  TransTerminal in 'TransTerminal.pas',
+  TransTransformation in 'TransTransformation.pas',
+  Analyzer in 'Analyzer.pas' {AnalyzeForm},
+  Minimization in 'Minimization.pas';
+
+{$R *.RES}
+
+begin
+  Application.CreateForm(TMainForm, MainForm);
+  Application.CreateForm(TAddDialogForm, AddDialogForm);
+  Application.CreateForm(TBitmapPrintForm, BitmapPrintForm);
+  Application.CreateForm(TChangeSizeForm, ChangeSizeForm);
+  Application.CreateForm(TAnalyzeForm, AnalyzeForm);
+  Application.Run;
+end.
