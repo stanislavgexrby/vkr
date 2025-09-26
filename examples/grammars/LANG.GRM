@@ -1,0 +1,84 @@
+program  :  initiations , main , functions, '|||'.
+ initiations  :@*( libraries ; declarations ).
+ functions  :  function * @.
+ libraries  : 'use','(',library, @*(',' , library ), ')'.
+ library  : ID. 
+ declarations  :  define_type ; declare_var.
+ define_type  :  type_ID,  '=',  type_sorts. 
+ type_sorts  :  typeset  ; define  ; define_type  ; type_expr. 
+ define  : '{', ( such_as  ; enumerate ), '}', (@; array ).
+ such_as  :  ID_list,  ':' ,( expressions  ; declare_list )*@. //   +!!!
+ declare_list  :  declare ,@*(',' , declare ).
+ declare  :  ID_list , '{',  type_sorts   ;  type_sorts , '}' , ID_list.
+ ID_list  :  ID ,@*(',' , ID ).
+ typeset  :  type_ID , (@; array ).
+ enumerate  :  expressions. 
+ declare_var  :  init_list , '{' , type_sorts 
+                ;    type_sorts , '}' , init_list. 
+ init_list  :  init , @*(',' , init ).
+ init  :  ID  ; assign.
+ array  : '^', '[',  element, @*('x',  element ), ']' ; '^' , element. 
+ element  : (@;'+'),('DIGITS' ;'inf').
+ type_expr  :  type_rel ,(@; u_type_rel_op ),@*( type_rel_op , type_rel ).
+ type_rel  :  type_primary,@*( type_op , type_primary ).
+ type_primary  : '(' , type_expr , ')'  ;  type_ID   ;  assign2   ;  literal 
+                ;    expr_array   ;  neutral. 
+ type_op  : 'union' ;'inter' ;'delta'.
+ type_rel_op  : '(_' ;'_)' ;'(=' ;'=)'.
+ u_type_rel_op  : '^c'.
+ neutral  : '|0' ;'|U'.
+ assign  :  ID , '=',  asg_part.
+ assign2  :  ID_use, assign_op, asg_part
+                ;    ID_use , assign_op2 ,(@; asg_part )
+                ;   (@; asg_part ), assign_op2,  ID_use. 
+ assign_op  : '=' ;'+=' ;'_=' ;'*=' ;'/='.
+ assign_op2  : '++' ;'--' ;'**' ;'//'.
+ asg_part  :  expression  ; expr_array  ;'@'.
+ ID  : 'LETTER' ,@*('LETTER' ;'DIGIT' ;'_').
+ ID_use  :  ID ,(@;'[',  index_list , ']'), ('.' , ID ,@*(@;'[' , index_list , ']')).
+ type_ID  :  ID,  extra. 
+ extra  : @*('+' ;'-').
+ index_list  :  index , @*(',' , index ).
+ index  :  element  ; slice. 
+ slice  :  element,  '..',  element   ; '..',  element   ;  element,  '..'.
+ expressions  :  expression , @*(',' , expression ).
+ expr_array  : '(' , sub_array , @*(',' , sub_array ), ')'.
+ sub_array  :  expr_array  ; expression  ;'@' ;'  ', '=',  expression. 
+ expression  : (@; u_log_op ),  condition , @*( log_op , condition ).
+ condition  :  relation , @*( rel_op , relation ).
+ relation  : (@; add_op ),  term, (@; u_op ), @*( add_op,  term, (@; u_op )).
+ term  :  factor , @*( mul_op , factor ).
+ factor  :  primary , @*( pow_op , primary ).
+ primary  : '(' , expression , ')'  ; ID_use  ; assign2  ; literal  ; expr_array  ; func_call. 
+ add_op  : '+' ;'-'.
+ mul_op  : '*' ;'/'.
+ pow_op  : '^'.
+ rel_op  : '!=' ;'==' ;'<' ;'>' ;'<=' ;'>=' ;'~' ;'!~'.
+ u_op  : '!'.
+ u_log_op  : 'not'.
+ log_op  : 'or' ;'and' ;'xor' ;'nor' ;'nand' ;'xnor'.
+ literal  :  string_lit  ; numb_lit  ; imag_lit  ; 'inf'.
+ string_lit  : '"', @*( 'chars'  ;' ' ;'=A7' ;'!' ;'"' ;'@' ;'#' ;'=A3' ;'$' ;'%' ;'&' ;'/' ;'{' ;'(' ;'[' ;')' ;']' ;'}' ;'=' ;'+' ;'-' ;'^' ;'=A8' ;'~' ;'*' ;'\' ;'?' ;'.' ;':' ;',' ;';' ;'<' ;'>' ;' ;'), '"'.
+ numb_lit  : (@; add_op ), @*( 'digit' ), '.', ' digits' , (@;('e' ;'E'), (@; add_op ),  'digits'  )
+;'=09' ; (@; add_op ) ,' digits' , (@;('e' ;'E') ,(@; add_op ) , 'digits'  ).
+ imag_lit  : (@; numb_lit ), ('i' ;'j').
+ main  : (@; type_sorts  ,'}'), 'main', '(', (@; params ) ,')', ':' , initiations,  statements , '.'.
+ function  : (@; type_sorts , '}'),  ID ,   '(', (@; params ), ')', ':' , initiations , statements , '.'.
+ params  :  param, @*(',' , param ).
+ param  :  declare_var .
+ statements  : @*( statement ) ; block .
+ block  : ':',  statements , '.'.
+ statement  :  assign2  ; control  ; func_call. 
+ control  :  for_s  ; while_s  ; until_s  ; if_s  ; case_s .
+ for_s  :  ID , '(' , range , ':' , statements , '.'.
+ range  :  closed  ; type_sorts. 
+ closed  : '[' , element , ',' , element , ']'.
+ while_s  :  expression , ':' , statements , '.'.
+ until_s  : ':' , statements , '.' , expression. 
+ if_s  :  simple_if  ; if .
+ simple_if  :  expression , '=>' , statements.
+ if  :  expression , ':', '=> ',  statements , (@;'!=>',  statements ), '.'.
+ case_s  :  expression,  rel_op , ':' ,@*( expression , '=> ' , statements ) ,(@;'<>',  statements ), '.'.
+ func_call  :  ID,  '(' , expressions , ')'.
+EOGram!
+

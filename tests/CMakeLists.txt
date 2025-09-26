@@ -16,17 +16,11 @@ endif()
 enable_testing()
 
 set(TEST_SOURCES
+    core/test_Lists.cpp
     core/test_Grammar.cpp
-    core/test_TerminalList.cpp
-    core/test_NonTerminalList.cpp
     regex/test_RETree.cpp
-    regex/test_RETerminal.cpp
-    regex/test_REOr.cpp
-    regex/test_REAnd.cpp
     parser/test_Parser.cpp
-    parser/test_CharProducer.cpp
-    transform/test_Transformation.cpp
-    utils/test_UndoRedo.cpp
+    integration/test_LoadGrammar.cpp
 )
 
 foreach(TEST_SOURCE ${TEST_SOURCES})
@@ -40,6 +34,10 @@ foreach(TEST_SOURCE ${TEST_SOURCES})
             GTest::gtest_main
     )
     
+    if(WIN32 AND MINGW)
+        target_link_options(${TEST_NAME} PRIVATE -Wl,--subsystem,console)
+    endif()
+    
     add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME})
     
     set_target_properties(${TEST_NAME} PROPERTIES
@@ -47,8 +45,8 @@ foreach(TEST_SOURCE ${TEST_SOURCES})
     )
 endforeach()
 
-add_custom_target(run_tests
-    COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
+add_custom_target(run_all_tests
+    COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure --verbose
     DEPENDS ${TEST_SOURCES}
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
