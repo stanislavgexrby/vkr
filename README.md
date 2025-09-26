@@ -14,28 +14,33 @@ pacman -S mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x
 **Linux:**
 ```bach
 sudo apt install build-essential cmake ninja-build
-
+```
 # Clone repository
 ```bash
 git clone <repository-url>
-cd syngt-cpp```
+cd syngt-cpp
+```
 
 # Create build directory
 ```bash
-mkdir build && cd build```
+mkdir build && cd build
+```
 
 # Configure
 ```bash
-cmake .. -G Ninja```
+cmake .. -G Ninja
+```
 
 # Build
 ```bash
-ninja```
+ninja
+```
 
 # Usage
 ```bash
 # From build directory
-./bin/syngt_cli path/to/grammar.grm ```
+./bin/syngt_cli path/to/grammar.grm
+```
 
 # Run tests
 ```bash
