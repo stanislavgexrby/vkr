@@ -10,7 +10,7 @@
 **Windows(MSYS2/MinGW):**
 ```bash
 pacman -S mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-ninja
-
+```
 **Linux:**
 ```bach
 sudo apt install build-essential cmake ninja-build
