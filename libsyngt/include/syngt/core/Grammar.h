@@ -105,7 +105,35 @@ public:
         return m_macros->getItems();
     }
     
-    // NTListItem* getNonTerminal(const std::string& name);
+    /**
+     * @brief Получить элемент нетерминала по имени
+     */
+    NTListItem* getNTItem(const std::string& name) const {
+        return m_nonTerminals->getItemByName(name);
+    }
+
+    /**
+     * @brief Получить элемент нетерминала по индексу
+     */
+    NTListItem* getNTItemByIndex(int index) const {
+        return m_nonTerminals->getItem(index);
+    }
+
+    /**
+     * @brief Установить правило для нетерминала (строка)
+     */
+    void setNTRule(const std::string& name, const std::string& rule);
+
+    /**
+     * @brief Установить правило для нетерминала (дерево)
+     * Реализация в .cpp (требует полный тип RETree)
+     */
+    void setNTRoot(const std::string& name, std::unique_ptr<RETree> root);
+
+    /**
+     * @brief Проверить, есть ли правило у нетерминала
+     */
+    bool hasRule(const std::string& name) const;
     
     TerminalList* terminals() { return m_terminals.get(); }
     const TerminalList* terminals() const { return m_terminals.get(); }

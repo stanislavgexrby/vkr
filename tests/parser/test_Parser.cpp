@@ -22,7 +22,7 @@ TEST_F(ParserTest, SimpleSequence) {
 
 TEST_F(ParserTest, SimpleAlternative) {
     auto tree = parser->parse("'program' ; 'begin'.", grammar.get());
-    EXPECT_EQ(tree->toString(EmptyMask(), false), "program;begin");
+    EXPECT_EQ(tree->toString(EmptyMask(), false), "'program';'begin'");
 }
 
 TEST_F(ParserTest, Iteration) {
@@ -32,7 +32,7 @@ TEST_F(ParserTest, Iteration) {
 
 TEST_F(ParserTest, WithParentheses) {
     auto tree = parser->parse("( 'begin' , statement ) ; 'end'.", grammar.get());
-    EXPECT_EQ(tree->toString(EmptyMask(), false), "begin,statement;end");
+    EXPECT_EQ(tree->toString(EmptyMask(), false), "'begin',statement;'end'");
 }
 
 TEST_F(ParserTest, ComplexExpression) {

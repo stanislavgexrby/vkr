@@ -1,11 +1,30 @@
 #include <syngt/core/NTListItem.h>
+#include <syngt/core/Grammar.h>
+#include <syngt/parser/Parser.h>
+#include <syngt/regex/RETree.h>
 
 namespace syngt {
 
+NTListItem::NTListItem() = default;
+
+NTListItem::NTListItem(Grammar* grammar, const std::string& name)
+    : m_grammar(grammar)
+    , m_name(name)
+{}
+
+NTListItem::~NTListItem() = default;
+
+NTListItem::NTListItem(NTListItem&&) noexcept = default;
+NTListItem& NTListItem::operator=(NTListItem&&) noexcept = default;
+
 void NTListItem::setValue(const std::string& value) {
     m_value = value;
-    // TODO: Распарсить value в дерево m_root
-    // Это будет делать Parser
+    setRootFromValue();
+}
+
+void NTListItem::setRoot(std::unique_ptr<RETree> root) {
+    m_root = std::move(root);
+    setValueFromRoot();
 }
 
 void NTListItem::setValueFromRoot() {
@@ -20,8 +39,30 @@ void NTListItem::setStringFromRoot() {
 }
 
 void NTListItem::setRootFromValue() {
-    // TODO: Парсинг value → root
-    // Будет реализовано с Parser
+    if (m_value.empty()) {
+        m_root.reset();
+        return;
+    }
+    
+    if (m_grammar) {
+        try {
+            Parser parser;
+            m_root = parser.parse(m_value, m_grammar);
+        } catch (...) {
+            m_root.reset();
+        }
+    }
+}
+
+void NTListItem::updateValueFromRoot() {
+    setValueFromRoot();
+}
+
+std::unique_ptr<RETree> NTListItem::copyRETree() const {
+    if (m_root) {
+        return m_root->copy();
+    }
+    return nullptr;
 }
 
 }

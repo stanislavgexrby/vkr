@@ -32,4 +32,18 @@ std::unique_ptr<RETree> RETerminal::copy() const {
     return std::make_unique<RETerminal>(m_grammar, m_id);
 }
 
+std::string RETerminal::toString(const SelectionMask& mask, bool reverse) const {
+    (void)mask;
+    (void)reverse;
+    
+    std::string name = getNameFromID();
+    
+    if (name == "ID" || name == "LETTER" || name == "DIGIT" || 
+        name == "chars" || name == "digit" || name == "digits") {
+        return name;
+    }
+    
+    return "'" + name + "'";
+}
+
 }

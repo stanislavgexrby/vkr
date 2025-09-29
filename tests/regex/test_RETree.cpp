@@ -27,7 +27,7 @@ TEST_F(RETreeTest, TerminalCreation) {
     
     EXPECT_EQ(term->id(), termId1);
     EXPECT_EQ(term->nameID(), "a");
-    EXPECT_EQ(term->toString(EmptyMask(), false), "a");
+    EXPECT_EQ(term->toString(EmptyMask(), false), "'a'");
 }
 
 TEST_F(RETreeTest, TerminalCopy) {
@@ -45,7 +45,7 @@ TEST_F(RETreeTest, AndOperation) {
     auto andOp = REAnd::make(std::move(term1), std::move(term2));
     
     EXPECT_EQ(andOp->operationChar(), ',');
-    EXPECT_EQ(andOp->toString(EmptyMask(), false), "a,b");
+    EXPECT_EQ(andOp->toString(EmptyMask(), false), "'a','b'");
 }
 
 TEST_F(RETreeTest, OrOperation) {
@@ -55,7 +55,7 @@ TEST_F(RETreeTest, OrOperation) {
     auto orOp = REOr::make(std::move(term1), std::move(term2));
     
     EXPECT_EQ(orOp->operationChar(), ';');
-    EXPECT_EQ(orOp->toString(EmptyMask(), false), "a;b");
+    EXPECT_EQ(orOp->toString(EmptyMask(), false), "'a';'b'");
 }
 
 TEST_F(RETreeTest, IterationOperation) {
@@ -65,7 +65,7 @@ TEST_F(RETreeTest, IterationOperation) {
     auto iterOp = REIteration::make(std::move(term1), std::move(term2));
     
     EXPECT_EQ(iterOp->operationChar(), '*');
-    EXPECT_EQ(iterOp->toString(EmptyMask(), false), "a*b");
+    EXPECT_EQ(iterOp->toString(EmptyMask(), false), "'a'*'b'");
 }
 
 TEST_F(RETreeTest, ComplexExpression) {
@@ -83,7 +83,7 @@ TEST_F(RETreeTest, ComplexExpression) {
     auto end = std::make_unique<RETerminal>(grammar.get(), tEnd);
     auto final = REAnd::make(std::move(seq1), std::move(end));
     
-    EXPECT_EQ(final->toString(EmptyMask(), false), "begin,statement;expression,end");
+    EXPECT_EQ(final->toString(EmptyMask(), false), "'begin',statement;expression,'end'");
     
     auto copy = final->copy();
     EXPECT_EQ(final->toString(EmptyMask(), false), 

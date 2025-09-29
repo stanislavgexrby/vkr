@@ -4,6 +4,7 @@
 #include <fstream>
 #include <stdexcept>
 #include <sstream>
+#include <iostream>
 
 namespace syngt {
 
@@ -13,6 +14,7 @@ Grammar::Grammar()
     , m_nonTerminals(std::make_unique<NonTerminalList>())
     , m_macros(std::make_unique<MacroList>())
 {
+    m_nonTerminals->setGrammar(this);
 }
 
 void Grammar::fillNew() {
@@ -36,44 +38,34 @@ void Grammar::load(const std::string& filename) {
     std::string line;
     
     while (std::getline(file, line)) {
-        // Проверяем конец грамматики
         if (line.find("EOGram!") != std::string::npos) {
             break;
         }
         
-        // Пропускаем пустые строки и комментарии
         if (line.empty() || line[0] == '{' || line[0] == '/') {
             continue;
         }
         
-        // Ищем двоеточие (разделитель имя : правило)
         size_t colonPos = line.find(':');
         if (colonPos == std::string::npos) {
             continue;
         }
         
-        // Извлекаем имя нетерминала
         std::string name = line.substr(0, colonPos);
-        // Убираем пробелы
         name.erase(0, name.find_first_not_of(" \t"));
         name.erase(name.find_last_not_of(" \t") + 1);
         
-        // Извлекаем правило
         std::string rule = line.substr(colonPos + 1);
         
-        // Добавляем нетерминал
         int ntId = addNonTerminal(name);
-        (void)ntId; // TODO: пока не используем
-
-        // Парсим правило
+        (void)ntId;
+        
         try {
             auto tree = parser.parse(rule, this);
-            
-            // TODO: Сохранить дерево в NTListItem
-            // Пока просто парсим
-            
+            setNTRoot(name, std::move(tree));
         } catch (const std::exception& e) {
-            // Игнорируем ошибки парсинга (можно логировать)
+            std::cerr << "Failed to parse rule for '" << name << "': " << e.what() << "\n";
+            std::cerr << "  Rule was: " << rule << "\n";
         }
     }
     
@@ -86,9 +78,17 @@ void Grammar::save(const std::string& filename) {
         throw std::runtime_error("Cannot create file: " + filename);
     }
     
-    // Записываем правила
-    for (const auto& nt : m_nonTerminals->getItems()) {
-        file << nt << " : /* TODO: правило */ .\n";
+    auto nts = m_nonTerminals->getItems();
+    for (size_t i = 0; i < nts.size(); ++i) {
+        NTListItem* item = m_nonTerminals->getItem(static_cast<int>(i));
+        if (item && item->hasRoot()) {
+            file << nts[i] << " : ";
+            
+            SelectionMask emptyMask;
+            file << item->root()->toString(emptyMask, false);
+            
+            file << " .\n";
+        }
     }
     
     file << "EOGram!\n";
@@ -96,12 +96,28 @@ void Grammar::save(const std::string& filename) {
 }
 
 void Grammar::regularize() {
-    // TODO: Реализовать регуляризацию
+    // TODO
 }
 
 void Grammar::addToDictionary(int dictionaryID, CharProducer* charProducer) {
     (void)dictionaryID;
     (void)charProducer;
+}
+
+void Grammar::setNTRule(const std::string& name, const std::string& rule) {
+    NTListItem* item = getNTItem(name);
+    if (item) {
+        item->setValue(rule);
+    }
+}
+
+void Grammar::setNTRoot(const std::string& name, std::unique_ptr<RETree> root) {
+    m_nonTerminals->setRootByName(name, std::move(root));
+}
+
+bool Grammar::hasRule(const std::string& name) const {
+    NTListItem* item = getNTItem(name);
+    return item && item->hasRoot();
 }
 
 }

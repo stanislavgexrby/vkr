@@ -18,9 +18,11 @@ enable_testing()
 set(TEST_SOURCES
     core/test_Lists.cpp
     core/test_Grammar.cpp
+    core/test_NTListItem.cpp
     regex/test_RETree.cpp
     parser/test_Parser.cpp
     integration/test_LoadGrammar.cpp
+    integration/test_GrammarPersistence.cpp
 )
 
 foreach(TEST_SOURCE ${TEST_SOURCES})

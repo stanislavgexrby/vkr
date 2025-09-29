@@ -27,6 +27,7 @@ public:
     ~RETerminal() override = default;
     
     std::unique_ptr<RETree> copy() const override;
+    std::string toString(const SelectionMask& mask, bool reverse) const override;
     
     void tryToSetEmptyMark() override {
         // Терминалы не могут быть пустыми

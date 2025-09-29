@@ -2,6 +2,8 @@
 #include <syngt/core/Grammar.h>
 
 int main(int argc, char* argv[]) {
+    (void)argc;
+    
     if (argc < 2) {
         std::cout << "SynGT C++ - Syntax Grammar Transformation Tool\n";
         std::cout << "Usage: " << argv[0] << " <grammar_file.grm>\n";
