@@ -1,6 +1,8 @@
 #include <syngt/core/Grammar.h>
 #include <syngt/parser/Parser.h>
 #include <syngt/core/NTListItem.h>
+#include <syngt/transform/LeftElimination.h>
+#include <syngt/transform/LeftFactorization.h> 
 #include <fstream>
 #include <stdexcept>
 #include <sstream>
@@ -95,10 +97,6 @@ void Grammar::save(const std::string& filename) {
     file.close();
 }
 
-void Grammar::regularize() {
-    // TODO
-}
-
 void Grammar::addToDictionary(int dictionaryID, CharProducer* charProducer) {
     (void)dictionaryID;
     (void)charProducer;
@@ -118,6 +116,17 @@ void Grammar::setNTRoot(const std::string& name, std::unique_ptr<RETree> root) {
 bool Grammar::hasRule(const std::string& name) const {
     NTListItem* item = getNTItem(name);
     return item && item->hasRoot();
+}
+
+void Grammar::regularize() {
+    // 1. Устранение левой рекурсии
+    LeftElimination::eliminate(this);
+    
+    // 2. Левая факторизация
+    LeftFactorization::factorizeAll(this);
+    
+    // TODO: 3. Удаление бесполезных символов
+    // RemoveUseless::remove(this);
 }
 
 }

@@ -65,6 +65,8 @@ set(LIBSYNGT_SOURCES
     src/transform/TransErrorUnit.cpp
     src/transform/TransCreator.cpp
     src/transform/TransTransformation.cpp
+    src/transform/LeftElimination.cpp
+    src/transform/LeftFactorization.cpp
     
     # Analysis
     src/analysis/Analyzer.cpp

@@ -11,6 +11,7 @@ namespace syngt {
 
 class CharProducer;
 class NTListItem;
+class LeftFactorization;
 
 /**
  * @brief Главный класс грамматики
@@ -50,12 +51,6 @@ public:
      * @param filename Путь к файлу .grm
      */
     void save(const std::string& filename);
-    
-    /**
-     * @brief Выполнить регуляризацию грамматики
-     * Удаляет левую и правую рекурсию
-     */
-    void regularize();
     
     int addTerminal(const std::string& s) {
         return m_terminals->add(s);
@@ -135,6 +130,16 @@ public:
      */
     bool hasRule(const std::string& name) const;
     
+    /**
+     * @brief Регуляризация грамматики
+     * 
+     * Выполняет последовательность трансформаций:
+     * 1. Устранение левой рекурсии
+     * 2. Левая факторизация (TODO)
+     * 3. Удаление бесполезных символов (TODO)
+     */
+    void regularize();
+
     TerminalList* terminals() { return m_terminals.get(); }
     const TerminalList* terminals() const { return m_terminals.get(); }
     

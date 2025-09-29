@@ -21,6 +21,8 @@ set(TEST_SOURCES
     core/test_NTListItem.cpp
     regex/test_RETree.cpp
     parser/test_Parser.cpp
+    transform/test_LeftElimination.cpp
+    transform/test_LeftFactorization.cpp
     integration/test_LoadGrammar.cpp
     integration/test_GrammarPersistence.cpp
 )
