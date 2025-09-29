@@ -4,12 +4,70 @@
 #include <syngt/regex/RETree.h>
 #include <syngt/regex/RETerminal.h>
 #include <syngt/regex/RENonTerminal.h>
+#include <syngt/regex/RESemantic.h>
 #include <syngt/regex/REAnd.h>
 #include <syngt/regex/REOr.h>
 #include <fstream>
 #include <sstream>
+#include <set>
 
 namespace syngt {
+
+struct ProductionSymbol {
+    bool isTerminal;
+    int id;
+    std::string name;
+};
+
+using Production = std::vector<ProductionSymbol>;
+
+// Извлечь список символов из дерева RE (для генерации продукции)
+static Production extractProductionFromTree(const RETree* tree, Grammar* grammar) {
+    Production result;
+    
+    if (!tree) return result;
+    
+    // Терминал
+    if (auto term = dynamic_cast<const RETerminal*>(tree)) {
+        ProductionSymbol sym;
+        sym.isTerminal = true;
+        sym.id = term->id();
+        sym.name = grammar->terminals()->getString(term->id());
+        result.push_back(sym);
+        return result;
+    }
+    
+    // Нетерминал
+    if (auto nt = dynamic_cast<const RENonTerminal*>(tree)) {
+        ProductionSymbol sym;
+        sym.isTerminal = false;
+        sym.id = nt->id();
+        auto nts = grammar->getNonTerminals();
+        if (nt->id() >= 0 && nt->id() < static_cast<int>(nts.size())) {
+            sym.name = nts[nt->id()];
+        }
+        result.push_back(sym);
+        return result;
+    }
+    
+    // Семантика (epsilon) - пустая продукция
+    if (dynamic_cast<const RESemantic*>(tree)) {
+        return result;
+    }
+    
+    // And (последовательность) - объединяем символы
+    if (auto andNode = dynamic_cast<const REAnd*>(tree)) {
+        auto left = extractProductionFromTree(andNode->left(), grammar);
+        auto right = extractProductionFromTree(andNode->right(), grammar);
+        result.insert(result.end(), left.begin(), left.end());
+        result.insert(result.end(), right.begin(), right.end());
+        return result;
+    }
+    
+    // Or не должен быть здесь - альтернативы обрабатываются на уровне выше
+    
+    return result;
+}
 
 std::string ParserGenerator::generate(
     Grammar* grammar,
@@ -24,7 +82,6 @@ std::string ParserGenerator::generate(
             return generatePython(grammar, table, className);
         case Language::Java:
         case Language::CSharp:
-            // TODO: реализовать позже
             return "// Not implemented yet";
         default:
             return "";
@@ -54,70 +111,88 @@ std::string ParserGenerator::generateCPP(
 ) {
     std::ostringstream out;
     
-    out << "// Generated LL(1) Parser\n";
+    // Заголовок
+    out << "// Generated LL(1) Predictive Parser\n";
     out << "// DO NOT EDIT - Generated from grammar\n\n";
     out << "#include <string>\n";
     out << "#include <vector>\n";
     out << "#include <stack>\n";
+    out << "#include <map>\n";
     out << "#include <stdexcept>\n";
     out << "#include <iostream>\n\n";
     
-    // Перечисления для символов
-    out << "// Token types\n";
-    out << "enum class TokenType {\n";
+    // Структура символа
+    out << "// Symbol in the grammar\n";
+    out << "struct Symbol {\n";
+    out << "    bool isTerminal;\n";
+    out << "    int id;\n";
+    out << "    \n";
+    out << "    bool operator==(const Symbol& other) const {\n";
+    out << "        return isTerminal == other.isTerminal && id == other.id;\n";
+    out << "    }\n";
+    out << "    \n";
+    out << "    bool operator<(const Symbol& other) const {\n";
+    out << "        if (isTerminal != other.isTerminal) return isTerminal < other.isTerminal;\n";
+    out << "        return id < other.id;\n";
+    out << "    }\n";
+    out << "};\n\n";
     
-    // Терминалы
+    // Token types enum
+    out << "// Token types (terminals)\n";
+    out << "enum TokenType {\n";
     auto terms = grammar->terminals()->getItems();
     for (size_t i = 0; i < terms.size(); ++i) {
-        out << "    " << terms[i];
+        out << "    TOKEN_" << terms[i] << " = " << i;
         if (i < terms.size() - 1) out << ",";
         out << "\n";
     }
-    out << "    END_OF_INPUT\n";
     out << "};\n\n";
     
-    // Нетерминалы
+    // Non-terminals enum
     out << "// Non-terminal symbols\n";
-    out << "enum class NonTerminal {\n";
+    out << "enum NonTerminalType {\n";
     auto nts = grammar->getNonTerminals();
     for (size_t i = 0; i < nts.size(); ++i) {
-        out << "    " << nts[i];
+        out << "    NT_" << nts[i] << " = " << i;
         if (i < nts.size() - 1) out << ",";
         out << "\n";
     }
     out << "};\n\n";
     
-    // Структура токена
+    // Token структура
     out << "struct Token {\n";
     out << "    TokenType type;\n";
     out << "    std::string value;\n";
+    out << "    \n";
+    out << "    Token(TokenType t, const std::string& v = \"\") : type(t), value(v) {}\n";
     out << "};\n\n";
+    
+    // Production typedef
+    out << "using Production = std::vector<Symbol>;\n\n";
     
     // Класс парсера
     out << "class " << className << " {\n";
     out << "private:\n";
     
-    // Таблица разбора
+    // Генерация таблицы разбора
     out << generateTableCPP(grammar, table);
     
     // Вспомогательные методы
-    out << "    // Convert symbol to string for error messages\n";
-    out << "    std::string tokenTypeToString(TokenType t) {\n";
-    out << "        switch(t) {\n";
+    out << "    std::string symbolToString(const Symbol& sym) {\n";
+    out << "        if (sym.isTerminal) {\n";
+    out << "            switch(sym.id) {\n";
     for (size_t i = 0; i < terms.size(); ++i) {
-        out << "            case TokenType::" << terms[i] << ": return \"" << terms[i] << "\";\n";
+        out << "                case " << i << ": return \"" << terms[i] << "\";\n";
     }
-    out << "            case TokenType::END_OF_INPUT: return \"$\";\n";
-    out << "            default: return \"UNKNOWN\";\n";
-    out << "        }\n";
-    out << "    }\n\n";
-    
-    out << "    std::string nonTerminalToString(NonTerminal nt) {\n";
-    out << "        switch(nt) {\n";
-    for (const auto& nt : nts) {
-        out << "            case NonTerminal::" << nt << ": return \"" << nt << "\";\n";
+    out << "                default: return \"UNKNOWN_TERMINAL\";\n";
+    out << "            }\n";
+    out << "        } else {\n";
+    out << "            switch(sym.id) {\n";
+    for (size_t i = 0; i < nts.size(); ++i) {
+        out << "                case " << i << ": return \"" << nts[i] << "\";\n";
     }
-    out << "            default: return \"UNKNOWN\";\n";
+    out << "                default: return \"UNKNOWN_NONTERMINAL\";\n";
+    out << "            }\n";
     out << "        }\n";
     out << "    }\n\n";
     
@@ -136,42 +211,48 @@ std::string ParserGenerator::generateTableCPP(
 ) {
     std::ostringstream out;
     
-    out << "    // Parsing table: M[NonTerminal][TokenType] -> Production\n";
-    out << "    // -1 means error, other numbers are production indices\n";
-    out << "    int getProduction(NonTerminal nt, TokenType term) {\n";
-    out << "        // This is a simplified version - production rules encoded as indices\n";
-    out << "        // In full implementation, would return actual production to apply\n";
-    
     auto nts = grammar->getNonTerminals();
     auto terms = grammar->terminals()->getItems();
     
-    // Генерируем switch по нетерминалам
-    out << "        switch(nt) {\n";
+    out << "    // Parsing table M[NonTerminal, Terminal] -> Production\n";
+    out << "    std::map<std::pair<int, int>, Production> parsingTable;\n\n";
     
-    for (const auto& ntName : nts) {
-        out << "            case NonTerminal::" << ntName << ":\n";
-        out << "                switch(term) {\n";
+    out << "    void initParsingTable() {\n";
+    
+    // Для каждого нетерминала
+    for (size_t i = 0; i < nts.size(); ++i) {
+        const std::string& ntName = nts[i];
         
         // Для каждого терминала
         for (size_t t = 0; t < terms.size(); ++t) {
             const RETree* rule = table->getRule(ntName, static_cast<int>(t));
             if (rule) {
-                out << "                    case TokenType::" << terms[t] << ": return " << t << ";\n";
+                Production prod = extractProductionFromTree(rule, grammar);
+                
+                out << "        parsingTable[{" << i << ", " << t << "}] = {";
+                for (size_t s = 0; s < prod.size(); ++s) {
+                    out << "{" << (prod[s].isTerminal ? "true" : "false") 
+                        << ", " << prod[s].id << "}";
+                    if (s < prod.size() - 1) out << ", ";
+                }
+                out << "};\n";
             }
         }
         
         // EOF
         const RETree* eofRule = table->getRule(ntName, -1);
         if (eofRule) {
-            out << "                    case TokenType::END_OF_INPUT: return " << terms.size() << ";\n";
+            Production prod = extractProductionFromTree(eofRule, grammar);
+            out << "        parsingTable[{" << i << ", -1}] = {";
+            for (size_t s = 0; s < prod.size(); ++s) {
+                out << "{" << (prod[s].isTerminal ? "true" : "false") 
+                    << ", " << prod[s].id << "}";
+                if (s < prod.size() - 1) out << ", ";
+            }
+            out << "};\n";
         }
-        
-        out << "                    default: return -1;\n";
-        out << "                }\n";
     }
     
-    out << "            default: return -1;\n";
-    out << "        }\n";
     out << "    }\n\n";
     
     return out.str();
@@ -182,46 +263,67 @@ std::string ParserGenerator::generateParseMethodCPP(Grammar* grammar) {
     
     auto nts = grammar->getNonTerminals();
     
-    out << "    bool parse(const std::vector<Token>& tokens) {\n";
-    out << "        std::stack<int> stateStack;  // Simplified: using symbol indices\n";
-    out << "        size_t tokenIndex = 0;\n\n";
+    out << "    " << "bool parse(const std::vector<Token>& tokens) {\n";
+    out << "        initParsingTable();\n\n";
+    
+    out << "        std::stack<Symbol> parseStack;\n";
+    out << "        size_t tokenPos = 0;\n\n";
     
     out << "        // Push start symbol\n";
-    out << "        stateStack.push(0);  // " << nts[0] << "\n\n";
+    out << "        parseStack.push({false, 0}); // " << nts[0] << "\n\n";
     
-    out << "        while (!stateStack.empty()) {\n";
-    out << "            int top = stateStack.top();\n";
-    out << "            stateStack.pop();\n\n";
+    out << "        while (!parseStack.empty()) {\n";
+    out << "            Symbol top = parseStack.top();\n";
+    out << "            parseStack.pop();\n\n";
     
-    out << "            TokenType currentToken = (tokenIndex < tokens.size()) ?\n";
-    out << "                tokens[tokenIndex].type : TokenType::END_OF_INPUT;\n\n";
-    
-    out << "            // Check if top is non-terminal\n";
-    out << "            if (top < " << nts.size() << ") {\n";
-    out << "                NonTerminal nt = static_cast<NonTerminal>(top);\n";
-    out << "                int production = getProduction(nt, currentToken);\n\n";
-    
-    out << "                if (production == -1) {\n";
-    out << "                    std::cerr << \"Parse error at token: \"\n";
-    out << "                              << tokenTypeToString(currentToken) << std::endl;\n";
-    out << "                    return false;\n";
-    out << "                }\n\n";
-    
-    out << "                // Apply production (push right-hand side in reverse)\n";
-    out << "                // Simplified implementation\n";
-    out << "            } else {\n";
-    out << "                // Top is terminal - match with current token\n";
-    out << "                if (tokenIndex >= tokens.size()) {\n";
-    out << "                    std::cerr << \"Unexpected end of input\" << std::endl;\n";
-    out << "                    return false;\n";
-    out << "                }\n\n";
-    
+    out << "            if (top.isTerminal) {\n";
     out << "                // Match terminal\n";
-    out << "                tokenIndex++;\n";
+    out << "                if (tokenPos >= tokens.size()) {\n";
+    out << "                    std::cerr << \"Parse error: unexpected end of input, expected \"\n";
+    out << "                              << symbolToString(top) << std::endl;\n";
+    out << "                    return false;\n";
+    out << "                }\n\n";
+    
+    out << "                if (tokens[tokenPos].type != top.id) {\n";
+    out << "                    std::cerr << \"Parse error: expected \" << symbolToString(top)\n";
+    out << "                              << \", got token \" << tokens[tokenPos].value << std::endl;\n";
+    out << "                    return false;\n";
+    out << "                }\n\n";
+    
+    out << "                tokenPos++; // Consume token\n";
+    out << "            } else {\n";
+    out << "                // Non-terminal - look up in parsing table\n";
+    out << "                int lookahead = (tokenPos < tokens.size()) ?\n";
+    out << "                    tokens[tokenPos].type : -1; // -1 for EOF\n\n";
+    
+    out << "                auto key = std::make_pair(top.id, lookahead);\n";
+    out << "                if (parsingTable.find(key) == parsingTable.end()) {\n";
+    out << "                    std::cerr << \"Parse error: no production for \"\n";
+    out << "                              << symbolToString(top) << \" with lookahead \";\n";
+    out << "                    if (lookahead == -1) {\n";
+    out << "                        std::cerr << \"EOF\";\n";
+    out << "                    } else if (tokenPos < tokens.size()) {\n";
+    out << "                        std::cerr << tokens[tokenPos].value;\n";
+    out << "                    }\n";
+    out << "                    std::cerr << std::endl;\n";
+    out << "                    return false;\n";
+    out << "                }\n\n";
+    
+    out << "                // Apply production (push RHS in reverse order)\n";
+    out << "                const Production& prod = parsingTable[key];\n";
+    out << "                for (int i = prod.size() - 1; i >= 0; i--) {\n";
+    out << "                    parseStack.push(prod[i]);\n";
+    out << "                }\n";
     out << "            }\n";
     out << "        }\n\n";
     
-    out << "        return tokenIndex >= tokens.size();\n";
+    out << "        // Check if all tokens consumed\n";
+    out << "        if (tokenPos < tokens.size()) {\n";
+    out << "            std::cerr << \"Parse error: extra tokens after parsing\" << std::endl;\n";
+    out << "            return false;\n";
+    out << "        }\n\n";
+    
+    out << "        return true;\n";
     out << "    }\n";
     
     return out.str();
@@ -234,24 +336,36 @@ std::string ParserGenerator::generatePython(
 ) {
     std::ostringstream out;
     
-    out << "# Generated LL(1) Parser\n";
+    out << "# Generated LL(1) Predictive Parser\n";
     out << "# DO NOT EDIT - Generated from grammar\n\n";
-    out << "from enum import Enum\n";
-    out << "from typing import List, Tuple\n\n";
+    out << "from typing import List, Tuple, Optional\n";
+    out << "from dataclasses import dataclass\n\n";
     
-    // Token types
-    out << "class TokenType(Enum):\n";
+    // Symbol class
+    out << "@dataclass\n";
+    out << "class Symbol:\n";
+    out << "    is_terminal: bool\n";
+    out << "    id: int\n\n";
+    
+    // Token class
+    out << "@dataclass\n";
+    out << "class Token:\n";
+    out << "    type: int\n";
+    out << "    value: str = \"\"\n\n";
+    
+    // Constants
     auto terms = grammar->terminals()->getItems();
-    for (size_t i = 0; i < terms.size(); ++i) {
-        out << "    " << terms[i] << " = " << i << "\n";
-    }
-    out << "    END_OF_INPUT = " << terms.size() << "\n\n";
-    
-    // Non-terminals
-    out << "class NonTerminal(Enum):\n";
     auto nts = grammar->getNonTerminals();
+    
+    out << "# Terminal types\n";
+    for (size_t i = 0; i < terms.size(); ++i) {
+        out << "TOKEN_" << terms[i] << " = " << i << "\n";
+    }
+    out << "EOF_TOKEN = -1\n\n";
+    
+    out << "# Non-terminal types\n";
     for (size_t i = 0; i < nts.size(); ++i) {
-        out << "    " << nts[i] << " = " << i << "\n";
+        out << "NT_" << nts[i] << " = " << i << "\n";
     }
     out << "\n";
     
@@ -274,28 +388,37 @@ std::string ParserGenerator::generateTablePython(
     auto nts = grammar->getNonTerminals();
     auto terms = grammar->terminals()->getItems();
     
-    out << "        # Parsing table\n";
-    out << "        self.table = {\n";
+    out << "        self.table = {}\n";
     
-    for (const auto& ntName : nts) {
-        out << "            NonTerminal." << ntName << ": {\n";
+    for (size_t i = 0; i < nts.size(); ++i) {
+        const std::string& ntName = nts[i];
         
         for (size_t t = 0; t < terms.size(); ++t) {
             const RETree* rule = table->getRule(ntName, static_cast<int>(t));
             if (rule) {
-                out << "                TokenType." << terms[t] << ": " << t << ",\n";
+                Production prod = extractProductionFromTree(rule, grammar);
+                out << "        self.table[(" << i << ", " << t << ")] = [";
+                for (size_t s = 0; s < prod.size(); ++s) {
+                    out << "Symbol(" << (prod[s].isTerminal ? "True" : "False") 
+                        << ", " << prod[s].id << ")";
+                    if (s < prod.size() - 1) out << ", ";
+                }
+                out << "]\n";
             }
         }
         
         const RETree* eofRule = table->getRule(ntName, -1);
         if (eofRule) {
-            out << "                TokenType.END_OF_INPUT: " << terms.size() << ",\n";
+            Production prod = extractProductionFromTree(eofRule, grammar);
+            out << "        self.table[(" << i << ", -1)] = [";
+            for (size_t s = 0; s < prod.size(); ++s) {
+                out << "Symbol(" << (prod[s].isTerminal ? "True" : "False") 
+                    << ", " << prod[s].id << ")";
+                if (s < prod.size() - 1) out << ", ";
+            }
+            out << "]\n";
         }
-        
-        out << "            },\n";
     }
-    
-    out << "        }\n";
     
     return out.str();
 }
@@ -305,30 +428,39 @@ std::string ParserGenerator::generateParseMethodPython(Grammar* grammar) {
     
     auto nts = grammar->getNonTerminals();
     
-    out << "    def parse(self, tokens: List[Tuple[TokenType, str]]) -> bool:\n";
-    out << "        stack = [NonTerminal." << nts[0] << "]\n";
-    out << "        token_index = 0\n\n";
+    out << "    def parse(self, tokens: List[Token]) -> bool:\n";
+    out << "        stack = [Symbol(False, 0)]  # Start symbol: " << nts[0] << "\n";
+    out << "        pos = 0\n\n";
     
     out << "        while stack:\n";
-    out << "            top = stack.pop()\n";
-    out << "            current_token = tokens[token_index][0] if token_index < len(tokens) else TokenType.END_OF_INPUT\n\n";
+    out << "            top = stack.pop()\n\n";
     
-    out << "            if isinstance(top, NonTerminal):\n";
-    out << "                if top not in self.table or current_token not in self.table[top]:\n";
-    out << "                    print(f'Parse error at {current_token}')\n";
+    out << "            if top.is_terminal:\n";
+    out << "                # Match terminal\n";
+    out << "                if pos >= len(tokens):\n";
+    out << "                    print('Parse error: unexpected end of input')\n";
     out << "                    return False\n\n";
     
-    out << "                production = self.table[top][current_token]\n";
-    out << "                # Apply production (push RHS in reverse)\n";
-    out << "                # Simplified implementation\n";
-    out << "            else:\n";
-    out << "                # Match terminal\n";
-    out << "                if token_index >= len(tokens):\n";
-    out << "                    print('Unexpected end of input')\n";
-    out << "                    return False\n";
-    out << "                token_index += 1\n\n";
+    out << "                if tokens[pos].type != top.id:\n";
+    out << "                    print(f'Parse error: expected {top.id}, got {tokens[pos].type}')\n";
+    out << "                    return False\n\n";
     
-    out << "        return token_index >= len(tokens)\n";
+    out << "                pos += 1\n";
+    out << "            else:\n";
+    out << "                # Non-terminal\n";
+    out << "                lookahead = tokens[pos].type if pos < len(tokens) else -1\n";
+    out << "                key = (top.id, lookahead)\n\n";
+    
+    out << "                if key not in self.table:\n";
+    out << "                    print(f'Parse error: no production for NT={top.id}, lookahead={lookahead}')\n";
+    out << "                    return False\n\n";
+    
+    out << "                # Apply production (push in reverse)\n";
+    out << "                production = self.table[key]\n";
+    out << "                for symbol in reversed(production):\n";
+    out << "                    stack.append(symbol)\n\n";
+    
+    out << "        return pos >= len(tokens)\n";
     
     return out.str();
 }
