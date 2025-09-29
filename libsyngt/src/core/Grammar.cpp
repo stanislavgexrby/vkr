@@ -2,7 +2,8 @@
 #include <syngt/parser/Parser.h>
 #include <syngt/core/NTListItem.h>
 #include <syngt/transform/LeftElimination.h>
-#include <syngt/transform/LeftFactorization.h> 
+#include <syngt/transform/LeftFactorization.h>
+#include <syngt/transform/RemoveUseless.h>
 #include <fstream>
 #include <stdexcept>
 #include <sstream>
@@ -125,8 +126,8 @@ void Grammar::regularize() {
     // 2. Левая факторизация
     LeftFactorization::factorizeAll(this);
     
-    // TODO: 3. Удаление бесполезных символов
-    // RemoveUseless::remove(this);
+    // 3. Удаление бесполезных символов
+    RemoveUseless::remove(this);
 }
 
 }

@@ -26,26 +26,22 @@ void LeftFactorization::factorizeAll(Grammar* grammar) {
 void LeftFactorization::factorize(NTListItem* nt, Grammar* grammar) {
     if (!nt || !grammar) return;
     
-    RETree* root = nt->root();
-    if (!root) return;
-    
-    // Собираем все альтернативы
-    std::vector<const RETree*> alternatives;
-    collectAlternatives(root, alternatives);
-    
-    // Если альтернатив меньше 2 - факторизовать нечего
-    if (alternatives.size() < 2) return;
-    
-    // Проверяем наличие общих префиксов
-    if (!hasCommonPrefixes(alternatives)) return;
-    
-    // Группируем по общим префиксам
-    auto groups = groupByPrefix(alternatives);
-    
-    // Строим новое правило
-    auto newRule = buildFactorizedRule(groups, grammar);
-    if (newRule) {
-        nt->setRoot(std::move(newRule));
+    int maxIterations = 10;
+    for (int i = 0; i < maxIterations; ++i) {
+        RETree* root = nt->root();
+        if (!root) return;
+        
+        std::vector<const RETree*> alternatives;
+        collectAlternatives(root, alternatives);
+        
+        if (alternatives.size() < 2) return;
+        if (!hasCommonPrefixes(alternatives)) return;
+        
+        auto groups = groupByPrefix(alternatives);
+        auto newRule = buildFactorizedRule(groups, grammar);
+        if (newRule) {
+            nt->setRoot(std::move(newRule));
+        }
     }
 }
 

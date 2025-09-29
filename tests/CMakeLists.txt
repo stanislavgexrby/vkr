@@ -23,6 +23,7 @@ set(TEST_SOURCES
     parser/test_Parser.cpp
     transform/test_LeftElimination.cpp
     transform/test_LeftFactorization.cpp
+    transform/test_RemoveUseless.cpp
     integration/test_LoadGrammar.cpp
     integration/test_GrammarPersistence.cpp
 )

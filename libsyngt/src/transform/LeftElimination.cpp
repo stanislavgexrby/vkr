@@ -21,39 +21,32 @@ void LeftElimination::eliminate(Grammar* grammar) {
     }
 }
 
-void LeftElimination::eliminateForNonTerminal(NTListItem* nt, Grammar* grammar) {
-    if (!nt || !grammar) return;
-    if (!hasDirectLeftRecursion(nt)) return;
+bool LeftElimination::isLeftRecursive(const RETree* node, const NTListItem* nt) {
+    if (!node || !nt) return false;
     
-    RETree* root = nt->root();
-    if (!root) return;
-    
-    // Списки для α (рекурсивные) и β (нерекурсивные) части
-    std::vector<std::unique_ptr<RETree>> alphaList;
-    std::vector<std::unique_ptr<RETree>> betaList;
-    
-    // Разделяем правило
-    collectAlphaAndBeta(root, nt, alphaList, betaList);
-    
-    // Если нет нерекурсивных альтернатив - ошибка в грамматике
-    if (betaList.empty()) {
-        return;  // Невозможно устранить
+    // Если это нетерминал - проверяем совпадение ID
+    if (auto ntNode = dynamic_cast<const RENonTerminal*>(node)) {
+        if (ntNode->grammar()) {
+            auto nts = ntNode->grammar()->getNonTerminals();
+            int id = ntNode->getID();
+            if (id >= 0 && id < static_cast<int>(nts.size())) {
+                return nts[id] == nt->name();
+            }
+        }
+        return false;
     }
     
-    // Создаем новый нетерминал A'
-    std::string newName = nt->name() + "_rec";
-    grammar->addNonTerminal(newName);
-    
-    // Строим A → β A'
-    auto newRoot = buildBetaWithRecursion(betaList, newName, grammar);
-    nt->setRoot(std::move(newRoot));
-    
-    // Строим A' → α A' | ε
-    NTListItem* newNT = grammar->getNTItem(newName);
-    if (newNT) {
-        auto newNTRoot = buildAlphaWithRecursion(alphaList, newName, grammar);
-        newNT->setRoot(std::move(newNTRoot));
+    // Если это последовательность (And)
+    if (auto andNode = dynamic_cast<const REAnd*>(node)) {
+        return isLeftRecursive(andNode->left(), nt);
     }
+    
+    // Если это альтернатива (Or)
+    if (auto orNode = dynamic_cast<const REOr*>(node)) {
+        return isLeftRecursive(orNode->left(), nt);
+    }
+    
+    return false;
 }
 
 bool LeftElimination::hasDirectLeftRecursion(NTListItem* nt) {
@@ -62,33 +55,7 @@ bool LeftElimination::hasDirectLeftRecursion(NTListItem* nt) {
     RETree* root = nt->root();
     if (!root) return false;
     
-    // Проверяем прямую левую рекурсию: A → A α
     return isLeftRecursive(root, nt);
-}
-
-bool LeftElimination::isLeftRecursive(const RETree* node, const NTListItem* nt) {
-    if (!node || !nt) return false;
-    
-    // Если это нетерминал
-    if (auto ntNode = dynamic_cast<const RENonTerminal*>(node)) {
-        // Сравниваем имена нетерминалов
-        return ntNode->nameID() == nt->name();
-    }
-    
-    // Если это последовательность (And)
-    if (auto andNode = dynamic_cast<const REAnd*>(node)) {
-        // Проверяем первый операнд
-        return isLeftRecursive(andNode->left(), nt);
-    }
-    
-    // Если это альтернатива (Or)
-    if (auto orNode = dynamic_cast<const REOr*>(node)) {
-        // Проверяем хотя бы одну альтернативу
-        return isLeftRecursive(orNode->left(), nt) || 
-               isLeftRecursive(orNode->right(), nt);
-    }
-    
-    return false;
 }
 
 void LeftElimination::collectAlphaAndBeta(
@@ -103,13 +70,11 @@ void LeftElimination::collectAlphaAndBeta(
     if (auto orNode = dynamic_cast<const REOr*>(root)) {
         // Обрабатываем левую часть
         if (isLeftRecursive(orNode->left(), nt)) {
-            // Это рекурсивная альтернатива → добавляем в alpha
+            // Рекурсивная альтернатива → добавляем в alpha
             auto alpha = extractAlpha(orNode->left(), nt);
-            if (alpha) {
-                alphaList.push_back(std::move(alpha));
-            }
+            alphaList.push_back(std::move(alpha));
         } else {
-            // Это нерекурсивная альтернатива → добавляем в beta
+            // Нерекурсивная альтернатива → добавляем в beta
             betaList.push_back(orNode->left()->copy());
         }
         
@@ -120,9 +85,7 @@ void LeftElimination::collectAlphaAndBeta(
         // Одиночное правило
         if (isLeftRecursive(root, nt)) {
             auto alpha = extractAlpha(root, nt);
-            if (alpha) {
-                alphaList.push_back(std::move(alpha));
-            }
+            alphaList.push_back(std::move(alpha));
         } else {
             betaList.push_back(root->copy());
         }
@@ -140,10 +103,16 @@ std::unique_ptr<RETree> LeftElimination::extractAlpha(const RETree* node, const 
         }
     }
     
-    // Если это просто A (без α)
+    // Если это просто A (без α) - возвращаем nullptr (будет epsilon)
     if (auto ntNode = dynamic_cast<const RENonTerminal*>(node)) {
-        if (ntNode->nameID() == nt->name()) {
-            return nullptr;  // Нет α части (просто epsilon)
+        if (ntNode->grammar()) {
+            auto nts = ntNode->grammar()->getNonTerminals();
+            int id = ntNode->getID();
+            if (id >= 0 && id < static_cast<int>(nts.size())) {
+                if (nts[id] == nt->name()) {
+                    return nullptr;  // Просто A, α пустая
+                }
+            }
         }
     }
     
@@ -157,17 +126,15 @@ std::unique_ptr<RETree> LeftElimination::buildBetaWithRecursion(
 ) {
     if (betaList.empty()) return nullptr;
     
-    // Создаем нетерминал A'
     int recId = grammar->findNonTerminal(recursiveName);
-    auto recNT = std::make_unique<RENonTerminal>(grammar, recId, false);
+    if (recId < 0) return nullptr;
     
-    // Строим β A' для каждой β
     std::unique_ptr<RETree> result;
     
     for (auto& beta : betaList) {
         // β , A'
-        auto recCopy = std::make_unique<RENonTerminal>(grammar, recId, false);
-        auto betaWithRec = REAnd::make(std::move(beta), std::move(recCopy));
+        auto recNT = std::make_unique<RENonTerminal>(grammar, recId, false);
+        auto betaWithRec = REAnd::make(std::move(beta), std::move(recNT));
         
         // Объединяем через Or
         if (!result) {
@@ -185,13 +152,9 @@ std::unique_ptr<RETree> LeftElimination::buildAlphaWithRecursion(
     const std::string& recursiveName,
     Grammar* grammar
 ) {
-    if (alphaList.empty()) {
-        // A' → ε (пустое правило)
-        int epsilonId = grammar->addSemantic("@");
-        return std::make_unique<RESemantic>(grammar, epsilonId);
-    }
-    
     int recId = grammar->findNonTerminal(recursiveName);
+    if (recId < 0) return nullptr;
+    
     std::unique_ptr<RETree> result;
     
     // Строим α A' для каждой α
@@ -217,9 +180,52 @@ std::unique_ptr<RETree> LeftElimination::buildAlphaWithRecursion(
     
     int epsilonId = grammar->addSemantic("@");
     auto epsilon = std::make_unique<RESemantic>(grammar, epsilonId);
-    result = REOr::make(std::move(result), std::move(epsilon));
+    
+    if (result) {
+        result = REOr::make(std::move(result), std::move(epsilon));
+    } else {
+        result = std::move(epsilon);
+    }
     
     return result;
+}
+
+void LeftElimination::eliminateForNonTerminal(NTListItem* nt, Grammar* grammar) {
+    if (!nt || !grammar) return;
+    if (!hasDirectLeftRecursion(nt)) return;
+    
+    RETree* root = nt->root();
+    if (!root) return;
+    
+    // Списки для α (рекурсивные) и β (нерекурсивные) части
+    std::vector<std::unique_ptr<RETree>> alphaList;
+    std::vector<std::unique_ptr<RETree>> betaList;
+    
+    // Разделяем правило
+    collectAlphaAndBeta(root, nt, alphaList, betaList);
+    
+    // Если нет нерекурсивных альтернатив - невозможно устранить
+    if (betaList.empty()) {
+        return;
+    }
+    
+    // Создаем новый нетерминал A'
+    std::string newName = nt->name() + "_rec";
+    grammar->addNonTerminal(newName);
+    
+    // Строим A → β A'
+    auto newRoot = buildBetaWithRecursion(betaList, newName, grammar);
+    if (newRoot) {
+        nt->setRoot(std::move(newRoot));
+    }
+    
+    NTListItem* newNT = grammar->getNTItem(newName);
+    if (newNT) {
+        auto newNTRoot = buildAlphaWithRecursion(alphaList, newName, grammar);
+        if (newNTRoot) {
+            newNT->setRoot(std::move(newNTRoot));
+        }
+    }
 }
 
 }

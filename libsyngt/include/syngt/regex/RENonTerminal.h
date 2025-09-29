@@ -52,6 +52,12 @@ public:
     bool isOpen() const { return m_isOpen; }
     void setOpen(bool open) { m_isOpen = open; }
     void setGrammar(Grammar* grammar) { m_grammar = grammar; }
+    /**
+     * @brief Получить индекс нетерминала
+     */
+    int getID() const { return m_id; }
+    
+    Grammar* grammar() const { return m_grammar; }
 };
 
 }

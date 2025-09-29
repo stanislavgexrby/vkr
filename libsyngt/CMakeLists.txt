@@ -67,6 +67,7 @@ set(LIBSYNGT_SOURCES
     src/transform/TransTransformation.cpp
     src/transform/LeftElimination.cpp
     src/transform/LeftFactorization.cpp
+    src/transform/RemoveUseless.cpp
     
     # Analysis
     src/analysis/Analyzer.cpp
