@@ -263,14 +263,23 @@ std::string ParserGenerator::generateParseMethodCPP(Grammar* grammar) {
     
     auto nts = grammar->getNonTerminals();
     
+    int startSymbol = 0;
+    for (size_t i = 0; i < nts.size(); ++i) {
+        NTListItem* nt = grammar->getNTItem(nts[i]);
+        if (nt && nt->hasRoot()) {
+            startSymbol = static_cast<int>(i);
+            break;
+        }
+    }
+    
     out << "    " << "bool parse(const std::vector<Token>& tokens) {\n";
     out << "        initParsingTable();\n\n";
     
     out << "        std::stack<Symbol> parseStack;\n";
     out << "        size_t tokenPos = 0;\n\n";
     
-    out << "        // Push start symbol\n";
-    out << "        parseStack.push({false, 0}); // " << nts[0] << "\n\n";
+    out << "        // Push start symbol: " << nts[startSymbol] << "\n";
+    out << "        parseStack.push({false, " << startSymbol << "}); \n\n";
     
     out << "        while (!parseStack.empty()) {\n";
     out << "            Symbol top = parseStack.top();\n";
@@ -428,8 +437,18 @@ std::string ParserGenerator::generateParseMethodPython(Grammar* grammar) {
     
     auto nts = grammar->getNonTerminals();
     
+    int startSymbol = 0;
+    for (size_t i = 0; i < nts.size(); ++i) {
+        NTListItem* nt = grammar->getNTItem(nts[i]);
+        if (nt && nt->hasRoot()) {
+            startSymbol = static_cast<int>(i);
+            break;
+        }
+    }
+    
     out << "    def parse(self, tokens: List[Token]) -> bool:\n";
-    out << "        stack = [Symbol(False, 0)]  # Start symbol: " << nts[0] << "\n";
+    out << "        # Start symbol: " << nts[startSymbol] << "\n";
+    out << "        stack = [Symbol(False, " << startSymbol << ")]  \n";
     out << "        pos = 0\n\n";
     
     out << "        while stack:\n";
