@@ -11,6 +11,9 @@ set(LIBSYNGT_SOURCES
     src/core/NTListItem.cpp
     src/core/Types.cpp
     
+    # CodeGen
+    src/codegen/ParserGenerator.cpp
+
     # Regex
     src/regex/RETree.cpp
     src/regex/RELeaf.cpp
@@ -68,9 +71,11 @@ set(LIBSYNGT_SOURCES
     src/transform/LeftElimination.cpp
     src/transform/LeftFactorization.cpp
     src/transform/RemoveUseless.cpp
+    src/transform/FirstFollow.cpp
     
     # Analysis
     src/analysis/Analyzer.cpp
+    src/analysis/ParsingTable.cpp
     src/analysis/Minimization.cpp
     src/analysis/DugaAutomat.cpp
     

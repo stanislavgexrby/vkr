@@ -97,3 +97,61 @@ TEST_F(LeftFactorizationTest, SaveAfterFactorization) {
     
     std::remove(filename.c_str());
 }
+
+TEST_F(LeftFactorizationTest, RecursiveFactorization) {
+    // S → 'a' 'b' 'c' | 'a' 'b' 'd' | 'a' 'x'
+    // Должна быть многоуровневая факторизация
+    
+    grammar->addNonTerminal("S");
+    grammar->setNTRule("S", "'a' , 'b' , 'c' ; 'a' , 'b' , 'd' ; 'a' , 'x'.");
+    
+    size_t beforeCount = grammar->getNonTerminals().size();
+    std::cout << "Before: " << beforeCount << " NTs\n";
+    
+    LeftFactorization::factorize(grammar->getNTItem("S"), grammar.get());
+    
+    size_t afterCount = grammar->getNonTerminals().size();
+    std::cout << "After: " << afterCount << " NTs\n";
+    
+    // После факторизации правила "S → abc | abd | ax"
+    // должно быть создано хотя бы 1 новый нетерминал (для факторизации)
+    // Рекурсивная факторизация может создать еще больше
+    EXPECT_GT(afterCount, beforeCount);  // Хотя бы 1 новый
+    
+    // Проверяем что S имеет правило
+    NTListItem* s = grammar->getNTItem("S");
+    ASSERT_NE(s, nullptr);
+    EXPECT_TRUE(s->hasRoot());
+    
+    // Выводим итоговое правило для отладки
+    std::cout << "Final S rule: " << s->value() << "\n";
+}
+
+TEST_F(LeftFactorizationTest, DeepRecursion) {
+    // Тестируем глубокую вложенность общих префиксов
+    // S → 'a' 'b' 'c' 'd' | 'a' 'b' 'c' 'e' | 'a' 'b' 'f'
+    
+    grammar->addNonTerminal("S");
+    grammar->setNTRule("S", "'a','b','c','d' ; 'a','b','c','e' ; 'a','b','f'.");
+    
+    size_t beforeCount = grammar->getNonTerminals().size();
+    
+    LeftFactorization::factorize(grammar->getNTItem("S"), grammar.get());
+    
+    // Должно создаться несколько уровней факторизованных нетерминалов
+    size_t afterCount = grammar->getNonTerminals().size();
+    EXPECT_GT(afterCount, beforeCount);
+    
+    // Проверяем что факторизация завершилась без ошибок
+    NTListItem* s = grammar->getNTItem("S");
+    EXPECT_TRUE(s->hasRoot());
+}
+
+TEST_F(LeftFactorizationTest, NoInfiniteLoop) {
+    // Проверяем что нет бесконечного цикла на сложных случаях
+    grammar->addNonTerminal("A");
+    grammar->setNTRule("A", "'x','y','z' ; 'x','y','w' ; 'p','q'.");
+    
+    // Должно завершиться без зависания
+    EXPECT_NO_THROW(LeftFactorization::factorize(grammar->getNTItem("A"), grammar.get()));
+}

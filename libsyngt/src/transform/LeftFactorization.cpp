@@ -26,22 +26,40 @@ void LeftFactorization::factorizeAll(Grammar* grammar) {
 void LeftFactorization::factorize(NTListItem* nt, Grammar* grammar) {
     if (!nt || !grammar) return;
     
-    int maxIterations = 10;
-    for (int i = 0; i < maxIterations; ++i) {
+    // Повторяем факторизацию пока есть изменения (как в Pascal)
+    const int maxIterations = 10;  // Защита от бесконечного цикла
+    
+    for (int iteration = 0; iteration < maxIterations; ++iteration) {
         RETree* root = nt->root();
         if (!root) return;
         
+        // Собираем все альтернативы
         std::vector<const RETree*> alternatives;
         collectAlternatives(root, alternatives);
         
+        // Если альтернатив меньше 2 - факторизовать нечего
         if (alternatives.size() < 2) return;
-        if (!hasCommonPrefixes(alternatives)) return;
         
-        auto groups = groupByPrefix(alternatives);
-        auto newRule = buildFactorizedRule(groups, grammar);
-        if (newRule) {
-            nt->setRoot(std::move(newRule));
+        // Проверяем наличие общих префиксов
+        if (!hasCommonPrefixes(alternatives)) {
+            return;  // Нет общих префиксов - выходим
         }
+        
+        // Группируем по общим префиксам
+        auto groups = groupByPrefix(alternatives);
+        
+        // Если группировка не дала результата - выходим
+        if (groups.size() == alternatives.size()) {
+            return;  // Каждая альтернатива в своей группе - нет факторизации
+        }
+        
+        // Строим новое правило
+        auto newRule = buildFactorizedRule(groups, grammar);
+        if (!newRule) return;
+        
+        nt->setRoot(std::move(newRule));
+        
+        // Продолжаем следующую итерацию для рекурсивной факторизации
     }
 }
 
@@ -74,6 +92,7 @@ std::unique_ptr<RETree> LeftFactorization::findCommonPrefix(
     if (and1 && and2) {
         // Сравниваем левые части
         if (treesEqual(and1->left(), and2->left())) {
+            // Есть общий префикс - возвращаем его
             return and1->left()->copy();
         }
     } else if (!and1 && !and2) {
@@ -151,12 +170,15 @@ std::unique_ptr<RETree> LeftFactorization::buildFactorizedRule(
                 result = REOr::make(std::move(result), std::move(alt));
             }
         } else if (group.size() > 1) {
-            // Находим общий префикс
+            // Группа с общим префиксом - факторизуем
+            
+            // Находим общий префикс (между первыми двумя)
             auto prefix = findCommonPrefix(group[0], group[1]);
+            if (!prefix) continue;  // Не должно случиться, но защита
             
             // Создаем новый нетерминал для суффиксов
-            std::string baseName = "factored";
-            std::string newName = baseName + "_" + std::to_string(grammar->getNonTerminals().size());
+            std::string newName = "factored_" + std::to_string(grammar->getNonTerminals().size());
+
             grammar->addNonTerminal(newName);
             
             // Строим правило для нового нетерминала (суффиксы)
@@ -181,10 +203,16 @@ std::unique_ptr<RETree> LeftFactorization::buildFactorizedRule(
                 grammar->setNTRoot(newName, std::move(suffixRule));
             }
             
+            // Рекурсивно факторизуем новый нетерминал
+            NTListItem* newNT = grammar->getNTItem(newName);
+            if (newNT) {
+                factorize(newNT, grammar);  // ← Рекурсивный вызов!
+            }
+            
             // Строим префикс + новый нетерминал
             int newNTId = grammar->findNonTerminal(newName);
-            auto newNT = std::make_unique<RENonTerminal>(grammar, newNTId, false);
-            auto factored = REAnd::make(std::move(prefix), std::move(newNT));
+            auto newNTNode = std::make_unique<RENonTerminal>(grammar, newNTId, false);
+            auto factored = REAnd::make(std::move(prefix), std::move(newNTNode));
             
             if (!result) {
                 result = std::move(factored);

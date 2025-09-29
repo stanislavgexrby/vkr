@@ -16,6 +16,8 @@ endif()
 enable_testing()
 
 set(TEST_SOURCES
+    analysis/test_ParsingTable.cpp
+    codegen/test_ParserGenerator.cpp
     core/test_Lists.cpp
     core/test_Grammar.cpp
     core/test_NTListItem.cpp
@@ -24,6 +26,7 @@ set(TEST_SOURCES
     transform/test_LeftElimination.cpp
     transform/test_LeftFactorization.cpp
     transform/test_RemoveUseless.cpp
+    transform/test_FirstFollow.cpp
     integration/test_LoadGrammar.cpp
     integration/test_GrammarPersistence.cpp
 )

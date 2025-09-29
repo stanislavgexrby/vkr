@@ -29,6 +29,8 @@ public:
     std::unique_ptr<RETree> copy() const override;
     std::string toString(const SelectionMask& mask, bool reverse) const override;
     
+    int getID() const { return id(); }
+
     void tryToSetEmptyMark() override {
         // Терминалы не могут быть пустыми
     }
