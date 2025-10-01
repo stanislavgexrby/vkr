@@ -9,79 +9,31 @@ set(LIBSYNGT_SOURCES
     src/core/SemanticList.cpp
     src/core/MacroList.cpp
     src/core/NTListItem.cpp
-    src/core/Types.cpp
     
     # Regex
-    src/regex/RETree.cpp
     src/regex/RELeaf.cpp
     src/regex/RETerminal.cpp
     src/regex/RESemantic.cpp
-    src/regex/REMacro.cpp
     src/regex/RENonTerminal.cpp
     src/regex/REBinaryOp.cpp
-    src/regex/REOr.cpp
-    src/regex/REAnd.cpp
-    src/regex/REIteration.cpp
     
     # Graphics
-    src/graphics/DrawObject.cpp
-    src/graphics/DrawObjectList.cpp
-    src/graphics/DrawPoint.cpp
-    src/graphics/DrawObjectPoint.cpp
-    src/graphics/DrawObjectExtended.cpp
-    src/graphics/DrawObjectBorder.cpp
-    src/graphics/DrawObjectTerminal.cpp
-    src/graphics/DrawObjectNonTerminal.cpp
-    src/graphics/DrawObjectMacro.cpp
     src/graphics/Arrow.cpp
-    src/graphics/SemanticArrow.cpp
-    src/graphics/Ward.cpp
     
     # Parser
     src/parser/Parser.cpp
-    src/parser/Parser2.cpp
-    src/parser/CharProducer.cpp
-    src/parser/ErrorHandler.cpp
     
     # Transform
-    src/transform/Transformation.cpp
-    src/transform/TransGrammar.cpp
-    src/transform/TransRE_Tree.cpp
-    src/transform/TransRE_Terminal.cpp
-    src/transform/TransRE_Semantic.cpp
-    src/transform/TransRE_Nonterminal.cpp
-    src/transform/TransRE_Or.cpp
-    src/transform/TransRE_And.cpp
-    src/transform/TransRE_Iteration.cpp
-    src/transform/TransRE_BinaryOp.cpp
-    src/transform/TransRE_Leaf.cpp
-    src/transform/TransLeaf.cpp
-    src/transform/TransNonterminal.cpp
-    src/transform/TransTerminal.cpp
-    src/transform/TransSemantic.cpp
-    src/transform/TransParser.cpp
-    src/transform/TransParser2.cpp
-    src/transform/TransCharProducer.cpp
-    src/transform/TransErrorUnit.cpp
-    src/transform/TransCreator.cpp
-    src/transform/TransTransformation.cpp
     src/transform/LeftElimination.cpp
     src/transform/LeftFactorization.cpp
     src/transform/RemoveUseless.cpp
     src/transform/FirstFollow.cpp
     
     # Analysis
-    src/analysis/Analyzer.cpp
     src/analysis/ParsingTable.cpp
-    src/analysis/Minimization.cpp
-    src/analysis/DugaAutomat.cpp
     
     # Utils
-    src/utils/UndoRedo.cpp
-    src/utils/Creator.cpp
-    src/utils/Dictionary.cpp
     src/utils/Semantic.cpp
-    src/utils/FileIO.cpp
 )
 
 add_library(syngt STATIC ${LIBSYNGT_SOURCES})
