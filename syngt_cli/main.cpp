@@ -6,13 +6,12 @@
 #include <syngt/transform/RemoveUseless.h>
 #include <syngt/transform/FirstFollow.h>
 #include <syngt/analysis/ParsingTable.h>
-#include <syngt/codegen/ParserGenerator.h>
 
 using namespace syngt;
 
 void printUsage(const char* progName) {
     std::cout << "SynGT C++ - Syntax Grammar Transformation Tool\n";
-    std::cout << "Version 1.0\n\n";
+    std::cout << "Version 1.0 (Pascal port)\n\n";
     std::cout << "Usage:\n";
     std::cout << "  " << progName << " <command> [options]\n\n";
     std::cout << "Commands:\n";
@@ -24,14 +23,10 @@ void printUsage(const char* progName) {
     std::cout << "  check-ll1 <grammar.grm>               - Check if grammar is LL(1)\n";
     std::cout << "  first-follow <grammar.grm>            - Compute and print FIRST/FOLLOW\n";
     std::cout << "  table <grammar.grm>                   - Generate parsing table\n";
-    std::cout << "  generate <grammar.grm> <output>       - Generate parser code\n";
-    std::cout << "           [--lang cpp|python]           - Target language (default: cpp)\n";
-    std::cout << "           [--class ClassName]           - Parser class name (default: Parser)\n";
     std::cout << "\nExamples:\n";
     std::cout << "  " << progName << " info examples/LANG.GRM\n";
     std::cout << "  " << progName << " regularize input.grm output.grm\n";
     std::cout << "  " << progName << " check-ll1 grammar.grm\n";
-    std::cout << "  " << progName << " generate grammar.grm parser.cpp --lang cpp\n";
 }
 
 int cmdInfo(const std::string& filename) {
@@ -184,8 +179,7 @@ int cmdCheckLL1(const std::string& filename) {
         } else {
             std::cout << "\n✗ Grammar is NOT LL(1)\n";
             std::cout << "\nSuggestion: Try applying transformations:\n";
-            std::cout << "  1. Left factorization (eliminate common prefixes)\n";
-            std::cout << "  2. Left recursion elimination\n";
+            std::cout << "  " << "syngt_cli regularize " << filename << " output.grm\n";
             return 1;
         }
     } catch (const std::exception& e) {
@@ -226,66 +220,9 @@ int cmdTable(const std::string& filename) {
         
         if (table->hasConflicts()) {
             std::cout << "\n⚠ Warning: Grammar has conflicts (not LL(1))\n";
+            std::cout << "Try: syngt_cli regularize " << filename << " output.grm\n";
             return 1;
         }
-        
-        return 0;
-    } catch (const std::exception& e) {
-        std::cerr << "Error: " << e.what() << "\n";
-        return 1;
-    }
-}
-
-int cmdGenerate(int argc, char* argv[]) {
-    if (argc < 4) {
-        std::cerr << "Usage: generate <grammar.grm> <output> [--lang cpp|python] [--class ClassName]\n";
-        return 1;
-    }
-    
-    std::string grammarFile = argv[2];
-    std::string outputFile = argv[3];
-    std::string lang = "cpp";
-    std::string className = "Parser";
-    
-    // Parse options
-    for (int i = 4; i < argc; ++i) {
-        std::string arg = argv[i];
-        if (arg == "--lang" && i + 1 < argc) {
-            lang = argv[++i];
-        } else if (arg == "--class" && i + 1 < argc) {
-            className = argv[++i];
-        }
-    }
-    
-    try {
-        Grammar grammar;
-        grammar.load(grammarFile);
-        
-        auto table = ParsingTable::build(&grammar);
-        if (!table) {
-            std::cerr << "Failed to build parsing table\n";
-            return 1;
-        }
-        
-        if (table->hasConflicts()) {
-            std::cerr << "Warning: Grammar has conflicts (not LL(1))\n";
-            std::cerr << "Generated parser may not work correctly.\n";
-        }
-        
-        ParserGenerator::Language language;
-        if (lang == "cpp") {
-            language = ParserGenerator::Language::CPP;
-        } else if (lang == "python") {
-            language = ParserGenerator::Language::Python;
-        } else {
-            std::cerr << "Unknown language: " << lang << "\n";
-            return 1;
-        }
-        
-        std::cout << "Generating " << lang << " parser...\n";
-        ParserGenerator::saveToFile(&grammar, table.get(), language, outputFile, className);
-        
-        std::cout << "Done! Parser saved to: " << outputFile << "\n";
         
         return 0;
     } catch (const std::exception& e) {
@@ -357,9 +294,6 @@ int main(int argc, char* argv[]) {
             return 1;
         }
         return cmdTable(argv[2]);
-    }
-    else if (command == "generate") {
-        return cmdGenerate(argc, argv);
     }
     else if (command == "--help" || command == "-h") {
         printUsage(argv[0]);

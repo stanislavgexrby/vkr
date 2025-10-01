@@ -11,9 +11,6 @@ set(LIBSYNGT_SOURCES
     src/core/NTListItem.cpp
     src/core/Types.cpp
     
-    # CodeGen
-    src/codegen/ParserGenerator.cpp
-
     # Regex
     src/regex/RETree.cpp
     src/regex/RELeaf.cpp

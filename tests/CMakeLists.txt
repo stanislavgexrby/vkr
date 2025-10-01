@@ -17,7 +17,6 @@ enable_testing()
 
 set(TEST_SOURCES
     analysis/test_ParsingTable.cpp
-    codegen/test_ParserGenerator.cpp
     core/test_Lists.cpp
     core/test_Grammar.cpp
     core/test_NTListItem.cpp
