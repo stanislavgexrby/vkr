@@ -28,6 +28,8 @@ set(TEST_SOURCES
     transform/test_FirstFollow.cpp
     integration/test_LoadGrammar.cpp
     integration/test_GrammarPersistence.cpp
+    utils/test_Semantic.cpp
+    graphics/test_DrawPoint.cpp
 )
 
 foreach(TEST_SOURCE ${TEST_SOURCES})

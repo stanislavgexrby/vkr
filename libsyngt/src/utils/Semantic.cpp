@@ -1,26 +1,27 @@
 #include <syngt/utils/Semantic.h>
 #include <iostream>
+#include <sstream>
 
 namespace syngt {
 
 void SemanticIDList::save() {
-    std::cout << m_items.size() << std::endl;
-    for (int id : m_items) {
-        std::cout << id << std::endl;
+    std::cout << count() << "\n";
+    for (int i = 0; i < count(); ++i) {
+        std::cout << getID(i) << "\n";
     }
 }
 
 void SemanticIDList::load() {
-    int count;
-    std::cin >> count;
+    int idCount;
+    std::cin >> idCount;
     
     m_items.clear();
-    m_items.reserve(count);
+    m_items.reserve(idCount);
     
-    for (int i = 0; i < count; ++i) {
-        int id;
-        std::cin >> id;
-        m_items.push_back(id);
+    for (int i = 0; i < idCount; ++i) {
+        int curID;
+        std::cin >> curID;
+        add(curID);
     }
 }
 
