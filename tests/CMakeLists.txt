@@ -22,6 +22,8 @@ set(TEST_SOURCES
     core/test_NTListItem.cpp
     regex/test_RETree.cpp
     parser/test_Parser.cpp
+    parser/test_CharProducer.cpp
+    parser/test_Integration.cpp
     transform/test_LeftElimination.cpp
     transform/test_LeftFactorization.cpp
     transform/test_RemoveUseless.cpp
@@ -29,6 +31,8 @@ set(TEST_SOURCES
     integration/test_LoadGrammar.cpp
     integration/test_GrammarPersistence.cpp
     utils/test_Semantic.cpp
+    utils/test_UndoRedo.cpp
+    utils/test_Creator.cpp
     graphics/test_DrawPoint.cpp
     graphics/test_DrawObject.cpp
 )

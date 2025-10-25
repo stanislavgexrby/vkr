@@ -33,6 +33,7 @@ set(LIBSYNGT_SOURCES
     
     # Analysis
     src/analysis/ParsingTable.cpp
+    src/analysis/Minimization.cpp 
     
     # Utils
     src/utils/Semantic.cpp
