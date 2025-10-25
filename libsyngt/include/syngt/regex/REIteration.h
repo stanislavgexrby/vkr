@@ -9,8 +9,6 @@ namespace syngt {
  * Представляет повторение: A * B (A повторяется, затем B)
  * В грамматиках: @* означает 0 или более раз
  * Символ операции: '*'
- * 
- * Соответствует Pascal: TRE_Iteration
  */
 class REIteration : public REBinaryOp {
 protected:

@@ -39,7 +39,6 @@ public:
     
     /**
      * @brief Создать копию дерева RE
-     * Реализация в .cpp (требует полный тип RETree)
      */
     std::unique_ptr<RETree> copyRETree() const;
     

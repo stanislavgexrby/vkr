@@ -5,7 +5,6 @@
 
 using namespace syngt::graphics;
 
-// Простая реализация DrawPoint для тестов
 class TestDrawPoint : public DrawPoint {
 public:
     int getLength() const override { return 50; }
@@ -79,8 +78,6 @@ TEST(ArrowTest, Save) {
     std::string output = buffer.str();
     EXPECT_EQ(output, "0\n1\n"); // ctArrow=0, cwFORWARD=1
 }
-
-// SemanticArrow tests
 
 TEST(SemanticArrowTest, Constructor) {
     TestDrawPoint point;

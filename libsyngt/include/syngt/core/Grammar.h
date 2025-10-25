@@ -18,8 +18,6 @@ class LeftFactorization;
  * 
  * Объединяет все списки: терминалы, нетерминалы, семантики, макросы.
  * Управляет загрузкой, сохранением и трансформациями грамматики.
- * 
- * Соответствует Pascal: TGrammar
  */
 class Grammar {
 private:
@@ -149,7 +147,6 @@ public:
 
     /**
      * @brief Установить правило для нетерминала (дерево)
-     * Реализация в .cpp (требует полный тип RETree)
      */
     void setNTRoot(const std::string& name, std::unique_ptr<RETree> root);
 

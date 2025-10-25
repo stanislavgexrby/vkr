@@ -8,8 +8,6 @@ namespace syngt {
  * 
  * Представляет последовательность: A , B (сначала A, потом B)
  * Символ операции: ','
- * 
- * Соответствует Pascal: TRE_And
  */
 class REAnd : public REBinaryOp {
 protected:

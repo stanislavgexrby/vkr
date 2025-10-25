@@ -6,20 +6,17 @@
 namespace syngt {
 namespace graphics {
 
-// Константы из Arrow.pas
 constexpr int SpaceLength = 5;
 constexpr int MinArrowLength = 2 * SpaceLength;
 constexpr int SpikeLength = 7;
 constexpr int SpikeWidth = 3;
 constexpr int TextHeight = 15;
 
-// Типы стрелок
 enum ArrowType {
     ctArrow = 0,
     ctSemanticArrow = 1
 };
 
-// Forward declaration
 class DrawPoint;
 
 /**
@@ -27,8 +24,6 @@ class DrawPoint;
  * 
  * Представляет связь между двумя DrawPoint объектами.
  * Хранит длину, направление и указатель на источник.
- * 
- * Соответствует Pascal: TArrow в Arrow.pas
  */
 class Arrow {
 protected:
@@ -86,8 +81,6 @@ public:
  * 
  * Расширяет Arrow добавлением списка семантических ID.
  * Длина стрелки увеличивается на длину семантик.
- * 
- * Соответствует Pascal: TSemanticArrow в Arrow.pas
  */
 class SemanticArrow : public Arrow {
 private:

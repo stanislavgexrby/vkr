@@ -6,10 +6,6 @@
 namespace syngt {
 namespace graphics {
 
-// ============================================================================
-// DrawObject
-// ============================================================================
-
 bool DrawObject::internalPoint(int ax, int ay) const {
     return (ax >= m_x) && (ax <= endX()) && 
            (std::abs(ay - m_y) <= NS_Radius);
@@ -46,7 +42,7 @@ void DrawObject::copyAll(const DrawObject* other) {
 }
 
 DrawObject* DrawObject::addExtendedPoint(Grammar* grammar) {
-    (void)grammar; // Unused for now
+    (void)grammar;
     if (!m_inArrow) return nullptr;
     
     auto extPoint = new DrawObjectExtendedPoint();
@@ -80,17 +76,9 @@ void DrawObject::selectAllNotSelected() {
     }
 }
 
-// ============================================================================
-// DrawObjectExtendedPoint
-// ============================================================================
-
 bool DrawObjectExtendedPoint::internalPoint(int ax, int ay) const {
     return (std::abs(m_x - ax) <= 2) && (std::abs(m_y - ay) <= 2);
 }
-
-// ============================================================================
-// DrawObjectPoint
-// ============================================================================
 
 void DrawObjectPoint::setX(int x) {
     DrawObject::setX(x);
@@ -112,10 +100,6 @@ void DrawObjectPoint::selectAllNotSelected() {
     }
 }
 
-// ============================================================================
-// DrawObjectBorder
-// ============================================================================
-
 void DrawObjectBorder::setX(int x) {
     DrawObject::setX(x);
     m_changed = true;
@@ -131,10 +115,6 @@ void DrawObjectBorder::setPlace(int x, int y) {
     m_changed = true;
 }
 
-// ============================================================================
-// DrawObjectFirst
-// ============================================================================
-
 void DrawObjectFirst::placePoints() {
     m_points[0] = {m_x, m_y - NS_Radius};
     m_points[1] = {m_x, m_y + NS_Radius};
@@ -146,19 +126,11 @@ void DrawObjectFirst::place() {
                 VerticalSkipFromBorder + VerticalSkipForName + NS_Radius);
 }
 
-// ============================================================================
-// DrawObjectLast
-// ============================================================================
-
 void DrawObjectLast::placePoints() {
     m_points[0] = {endX(), m_y - NS_Radius};
     m_points[1] = {endX(), m_y + NS_Radius};
     m_points[2] = {m_x, m_y};
 }
-
-// ============================================================================
-// DrawObjectLeaf
-// ============================================================================
 
 DrawObjectLeaf::DrawObjectLeaf(Grammar* grammar, int id) 
     : m_id(id)
@@ -178,10 +150,6 @@ void DrawObjectLeaf::setLengthFromString(const std::string& s) {
     m_length = (NS_Radius * 2) + static_cast<int>(s.length()) * charWidth;
 }
 
-// ============================================================================
-// DrawObjectTerminal
-// ============================================================================
-
 DrawObjectTerminal::DrawObjectTerminal(Grammar* grammar, int id)
     : DrawObjectLeaf(grammar, id)
 {
@@ -199,10 +167,6 @@ std::string DrawObjectTerminal::getNameFromGrammar() const {
     }
     return "";
 }
-
-// ============================================================================
-// DrawObjectNonTerminal
-// ============================================================================
 
 DrawObjectNonTerminal::DrawObjectNonTerminal(Grammar* grammar, int id)
     : DrawObjectLeaf(grammar, id)
@@ -222,10 +186,6 @@ std::string DrawObjectNonTerminal::getNameFromGrammar() const {
     return "";
 }
 
-// ============================================================================
-// DrawObjectMacro
-// ============================================================================
-
 DrawObjectMacro::DrawObjectMacro(Grammar* grammar, int id)
     : DrawObjectNonTerminal(grammar, id)
 {
@@ -242,20 +202,12 @@ std::string DrawObjectMacro::getNameFromGrammar() const {
     return "";
 }
 
-// ============================================================================
-// IntegerList
-// ============================================================================
-
 void IntegerList::remove(int id) {
     auto it = std::find(m_items.begin(), m_items.end(), id);
     if (it != m_items.end()) {
         m_items.erase(it);
     }
 }
-
-// ============================================================================
-// DrawObjectList
-// ============================================================================
 
 DrawObjectList::DrawObjectList(Grammar* grammar)
     : m_grammar(grammar)

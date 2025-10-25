@@ -15,15 +15,11 @@ namespace graphics {
  * 
  * Преобразует дерево регулярного выражения (RETree) 
  * в список графических объектов (DrawObjectList) для отображения.
- * 
- * Соответствует Pascal: Creator.pas → CreateDrawObjects
  */
 namespace Creator {
 
 /**
  * @brief Константа вертикального отступа между элементами
- * 
- * В Pascal: cVerticalSpace = cNS_Radius + 7
  */
 constexpr int VerticalSpace = 30 + 7;  // NS_Radius + 7
 
@@ -39,15 +35,6 @@ constexpr int VerticalSpace = 30 + 7;  // NS_Radius + 7
  * @param list Список для заполнения (будет очищен)
  * @param tree Дерево регулярного выражения
  * @param grammar Грамматика (для контекста)
- * 
- * Соответствует Pascal:
- * ```pascal
- * Procedure CreateDrawObjects(
- *   var AList:TDrawObjectList;
- *   ARE_Tree:TRE_Tree;
- *   Form:TComponent
- * );
- * ```
  */
 void createDrawObjects(
     graphics::DrawObjectList* list,

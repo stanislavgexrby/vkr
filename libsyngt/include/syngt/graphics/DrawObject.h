@@ -21,8 +21,6 @@ class DrawObjectList;
  * - входящую стрелку (InArrow)
  * - возможность выделения (Selected)
  * - методы размещения (setPlaceToRight/Down)
- * 
- * Соответствует Pascal: TDrawObject
  */
 class DrawObject : public DrawPoint {
 protected:
@@ -83,7 +81,6 @@ public:
      */
     virtual void selectAllNotSelected();
     
-    // Getters/Setters
     bool selected() const { return m_selected; }
     void setSelected(bool selected) { m_selected = selected; }
     
@@ -99,7 +96,6 @@ public:
  * @brief Расширенная точка (маленький кружок на стрелке)
  * 
  * Используется для разветвлений и точек выбора.
- * Соответствует Pascal: TDrawObjectExtendedPoint
  */
 class DrawObjectExtendedPoint : public DrawObject {
 public:
@@ -113,7 +109,6 @@ public:
  * @brief Точка с двумя входящими стрелками
  * 
  * Используется для схождения альтернатив.
- * Соответствует Pascal: TDrawObjectPoint
  */
 class DrawObjectPoint : public DrawObjectExtendedPoint {
 protected:
@@ -137,7 +132,6 @@ public:
  * @brief Граничный объект (треугольник)
  * 
  * Базовый класс для First и Last.
- * Соответствует Pascal: TDrawObjectBorder
  */
 class DrawObjectBorder : public DrawObject {
 protected:
@@ -172,7 +166,6 @@ public:
  * @brief Первый объект (начало диаграммы)
  * 
  * Треугольник направленный вправо.
- * Соответствует Pascal: TDrawObjectFirst
  */
 class DrawObjectFirst : public DrawObjectBorder {
 protected:
@@ -193,7 +186,6 @@ public:
  * @brief Последний объект (конец диаграммы)
  * 
  * Треугольник направленный влево.
- * Соответствует Pascal: TDrawObjectLast
  */
 class DrawObjectLast : public DrawObjectBorder {
 protected:
@@ -213,7 +205,6 @@ public:
  * @brief Листовой объект с ID и текстом
  * 
  * Базовый для Terminal, NonTerminal, Macro.
- * Соответствует Pascal: TDrawObjectLeaf
  */
 class DrawObjectLeaf : public DrawObject {
 protected:
@@ -244,8 +235,6 @@ public:
 
 /**
  * @brief Терминал (в овале)
- * 
- * Соответствует Pascal: TDrawObjectTerminal
  */
 class DrawObjectTerminal : public DrawObjectLeaf {
 protected:
@@ -260,8 +249,6 @@ public:
 
 /**
  * @brief Нетерминал (в прямоугольнике)
- * 
- * Соответствует Pascal: TDrawObjectNonTerminal
  */
 class DrawObjectNonTerminal : public DrawObjectLeaf {
 protected:
@@ -276,8 +263,6 @@ public:
 
 /**
  * @brief Макрос (в пунктирном прямоугольнике)
- * 
- * Соответствует Pascal: TDrawObjectMacro
  */
 class DrawObjectMacro : public DrawObjectNonTerminal {
 protected:
@@ -310,7 +295,6 @@ public:
  * @brief Контейнер графических объектов
  * 
  * Управляет списком DrawObject, выделением, размещением.
- * Соответствует Pascal: TDrawObjectList
  */
 class DrawObjectList {
 private:

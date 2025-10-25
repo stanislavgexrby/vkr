@@ -9,9 +9,6 @@ namespace syngt {
 class Grammar;
 class RETree;
 
-/**
- * @brief Список нетерминалов
- */
 class NonTerminalList {
 private:
     std::vector<std::string> m_list;
@@ -67,16 +64,8 @@ public:
         return nullptr;
     }
     
-    /**
-     * @brief Установить дерево для нетерминала
-     * Реализация в .cpp (требует полный тип RETree)
-     */
     void setRoot(int index, std::unique_ptr<RETree> root);
     
-    /**
-     * @brief Установить дерево для нетерминала по имени
-     * Реализация в .cpp (требует полный тип RETree)
-     */
     void setRootByName(const std::string& name, std::unique_ptr<RETree> root);
 };
 

@@ -9,8 +9,6 @@
  * Используется при импорте грамматик из других форматов.
  * Сопоставляет названия разделов (TERMINALS, NONTERMINALS и т.д.)
  * с соответствующими списками в Grammar.
- * 
- * Соответствует Pascal: Dictionary.pas
  */
 
 namespace syngt {
@@ -36,8 +34,6 @@ public:
      * @param name Имя раздела (например "TERMINALS", "NONTERMINALS")
      * @return Индекс типа (cgTerminalList=0, cgSemanticList=1, cgNonTerminalList=2, cgMacroList=3)
      *         или cgSemanticList для неизвестных типов
-     * 
-     * Соответствует Pascal: FindDictionaryName
      */
     static int findDictionaryType(const std::string& name);
     
@@ -59,7 +55,6 @@ inline const std::vector<std::string> Dictionary::s_names = {
 };
 
 inline int Dictionary::findDictionaryType(const std::string& name) {
-    // Поиск без учета регистра (в Pascal использовался AnsiUpperCase)
     std::string upperName = name;
     for (char& c : upperName) {
         c = std::toupper(static_cast<unsigned char>(c));

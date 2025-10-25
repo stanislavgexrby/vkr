@@ -26,7 +26,7 @@ void Grammar::fillNew() {
     m_nonTerminals->clear();
     m_macros->clear();
     
-    // КРИТИЧНО: Добавляем epsilon как первый терминал (ID=0)
+    // Добавляем epsilon как первый терминал (ID=0)
     // Пустая строка используется как epsilon в операциях @*, @+, [E] и т.д.
     m_terminals->add("");  // Epsilon терминал
     

@@ -9,8 +9,6 @@ class Grammar;
 
 /**
  * @brief Маска выделения (ID объектов)
- * 
- * Соответствует Pascal: TSelMas = array of integer
  */
 using SelectionMask = std::vector<int>;
 
@@ -19,8 +17,6 @@ using SelectionMask = std::vector<int>;
  * 
  * Хранит снимок состояния грамматики: имена нетерминалов,
  * их значения, индекс активного нетерминала и маску выделения.
- * 
- * Соответствует Pascal: TUndoState
  */
 struct UndoState {
     std::vector<std::string> ntNames;     // Имена нетерминалов
@@ -43,8 +39,6 @@ struct UndoState {
  * - Откат к предыдущему состоянию (Undo)
  * - Повтор отмененного действия (Redo)
  * - Оптимизация: не сохраняет идентичные состояния подряд
- * 
- * Соответствует Pascal: TUndoRedo
  */
 class UndoRedo {
 private:

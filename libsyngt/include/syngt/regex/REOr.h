@@ -8,8 +8,6 @@ namespace syngt {
  * 
  * Представляет выбор: A ; B (A или B)
  * Символ операции: ';'
- * 
- * Соответствует Pascal: TRE_Or
  */
 class REOr : public REBinaryOp {
 protected:

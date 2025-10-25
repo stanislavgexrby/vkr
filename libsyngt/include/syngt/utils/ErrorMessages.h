@@ -4,16 +4,10 @@
 
 /**
  * @brief Сообщения об ошибках и функции обработки ошибок
- * 
- * Соответствует Pascal: ErrorUnit.pas и TransErrorUnit.pas
- * 
- * В Pascal использовались MessageDlg для вывода ошибок.
- * В C++ используем исключения (std::runtime_error).
  */
 
 namespace syngt {
 
-// Сообщения об ошибках (resourcestring из Pascal)
 namespace ErrorMessages {
     inline std::string cantFindName(const std::string& name) {
         return "Can't find Identifier>" + name + "< in Dictionaries";

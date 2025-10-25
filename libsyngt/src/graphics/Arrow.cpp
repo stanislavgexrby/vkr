@@ -35,13 +35,10 @@ std::unique_ptr<Arrow> Arrow::copy() const {
 }
 
 DrawPoint* Arrow::save() {
-    // В Pascal: writeln(ctArrow); writeln(m_Ward);
     std::cout << ctArrow << "\n";
     std::cout << m_ward << "\n";
     return m_fromDO;
 }
-
-// SemanticArrow implementation
 
 SemanticArrow::SemanticArrow(int ward, DrawPoint* fromDO, std::unique_ptr<SemanticIDList> semantics)
     : Arrow()
@@ -70,7 +67,6 @@ std::unique_ptr<Arrow> SemanticArrow::copy() const {
 }
 
 DrawPoint* SemanticArrow::save() {
-    // В Pascal: writeln(ctSemanticArrow); writeln(m_Ward); m_Semantics.Save;
     std::cout << ctSemanticArrow << "\n";
     std::cout << m_ward << "\n";
     

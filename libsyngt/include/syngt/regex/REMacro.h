@@ -10,8 +10,6 @@ class NTListItem;
  * 
  * Макросы - это символы, которые могут быть раскрыты (opened) или закрыты.
  * Включает нетерминалы и специальные макросы.
- * 
- * Соответствует Pascal: TRE_Macro
  */
 class REMacro : public RELeaf {
 protected:

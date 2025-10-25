@@ -6,7 +6,6 @@
 
 namespace syngt {
 
-// Forward declarations
 class Grammar;
 class NTListItem;
 class RETree;

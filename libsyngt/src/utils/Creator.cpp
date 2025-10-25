@@ -23,7 +23,7 @@ public:
 void createDrawObjects(
     graphics::DrawObjectList* list,
     const RETree* tree,
-    Grammar* /* grammar */  // Пока не используется
+    Grammar*
 ) {
     if (!list || !tree) {
         return;
@@ -45,7 +45,6 @@ void createDrawObjects(
     int height = 0;
     
     // Построить диаграмму вправо
-    // В Pascal: PrevDO := ARE_Tree.DrawObjectsToRight(AList, Semantic, FirstDO, cwFORWARD, Height);
     // TODO: Реализовать RETree::drawObjectsToRight()
     // Пока просто установим prevDO = firstDO
     DrawObject* prevDO = firstPtr;

@@ -9,8 +9,6 @@ namespace syngt {
  * 
  * Используется для хранения последовательности семантических действий
  * на дугах синтаксической диаграммы.
- * 
- * Соответствует Pascal: unit Semantic → TSemanticIDList
  */
 class SemanticIDList {
 private:
