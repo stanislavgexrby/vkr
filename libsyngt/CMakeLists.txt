@@ -37,6 +37,7 @@ set(LIBSYNGT_SOURCES
     # Utils
     src/utils/Semantic.cpp
     src/utils/UndoRedo.cpp
+    src/utils/Creator.cpp
 )
 
 add_library(syngt STATIC ${LIBSYNGT_SOURCES})

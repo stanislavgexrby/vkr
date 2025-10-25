@@ -12,7 +12,6 @@ class Grammar;
 
 namespace graphics {
 
-// Forward declarations
 class DrawObjectList;
 
 /**
@@ -204,6 +203,10 @@ public:
     DrawObjectLast() = default;
     
     int getType() const override { return ctDrawObjectLast; }
+
+    void setPositionForCreator(int x, int y) {
+        setPlace(x, y);
+    }
 };
 
 /**
@@ -322,34 +325,22 @@ public:
     explicit DrawObjectList(Grammar* grammar);
     ~DrawObjectList() = default;
     
-    /**
-     * @brief Инициализировать с First и Last объектами
-     */
+    //Инициализировать с First и Last объектами
     void initialize();
     
-    /**
-     * @brief Добавить объект
-     */
+    //Добавить объект
     void add(std::unique_ptr<DrawObject> obj);
     
-    /**
-     * @brief Удалить все кроме первого
-     */
+    //Удалить все кроме первого
     void clearExceptFirst();
     
-    /**
-     * @brief Очистить полностью
-     */
+    //Очистить полностью
     void clear();
     
-    /**
-     * @brief Количество объектов
-     */
+    //Количество объектов
     int count() const { return static_cast<int>(m_items.size()); }
     
-    /**
-     * @brief Получить объект по индексу
-     */
+    //Получить объект по индексу
     DrawObject* operator[](int index) const {
         if (index >= 0 && index < count()) {
             return m_items[index].get();
@@ -357,14 +348,10 @@ public:
         return nullptr;
     }
     
-    /**
-     * @brief Найти индекс объекта
-     */
+    //Найти индекс объекта
     int indexOf(const DrawObject* obj) const;
     
-    /**
-     * @brief Найти объект по координатам
-     */
+    //Найти объект по координатам
     DrawObject* findDO(int x, int y) const;
     
     /**
