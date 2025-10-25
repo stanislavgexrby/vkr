@@ -20,6 +20,7 @@ set(LIBSYNGT_SOURCES
     # Graphics
     src/graphics/Arrow.cpp
     src/graphics/DrawPoint.cpp
+    src/graphics/DrawObject.cpp
     
     # Parser
     src/parser/Parser.cpp

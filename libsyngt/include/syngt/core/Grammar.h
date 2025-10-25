@@ -99,7 +99,35 @@ public:
     std::vector<std::string> getMacros() const {
         return m_macros->getItems();
     }
+
+    /**
+     * @brief Получить имя терминала по ID
+     */
+    std::string getTerminalName(int id) const {
+        return m_terminals->getString(id);
+    }
     
+    /**
+     * @brief Получить имя нетерминала по ID
+     */
+    std::string getNonTerminalName(int id) const {
+        return m_nonTerminals->getString(id);
+    }
+    
+    /**
+     * @brief Получить имя семантики по ID
+     */
+    std::string getSemanticName(int id) const {
+        return m_semantics->getString(id);
+    }
+    
+    /**
+     * @brief Получить имя макроса по ID
+     */
+    std::string getMacroName(int id) const {
+        return m_macros->getString(id);
+    }
+
     /**
      * @brief Получить элемент нетерминала по имени
      */
