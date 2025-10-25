@@ -36,6 +36,7 @@ set(LIBSYNGT_SOURCES
     
     # Utils
     src/utils/Semantic.cpp
+    src/utils/UndoRedo.cpp
 )
 
 add_library(syngt STATIC ${LIBSYNGT_SOURCES})
@@ -49,6 +50,8 @@ target_include_directories(syngt
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
+
+target_compile_features(syngt PUBLIC cxx_std_17)
 
 target_compile_options(syngt PRIVATE
     $<$<CXX_COMPILER_ID:MSVC>:/W4 /WX>

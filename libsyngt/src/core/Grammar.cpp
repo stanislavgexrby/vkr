@@ -26,6 +26,10 @@ void Grammar::fillNew() {
     m_nonTerminals->clear();
     m_macros->clear();
     
+    // КРИТИЧНО: Добавляем epsilon как первый терминал (ID=0)
+    // Пустая строка используется как epsilon в операциях @*, @+, [E] и т.д.
+    m_terminals->add("");  // Epsilon терминал
+    
     m_nonTerminals->fillNew();
 }
 
@@ -35,7 +39,7 @@ void Grammar::load(const std::string& filename) {
         throw std::runtime_error("Cannot open file: " + filename);
     }
     
-    fillNew();
+    fillNew();  // Инициализация включает добавление epsilon
     
     Parser parser;
     std::string line;
