@@ -108,21 +108,26 @@ void ClearOutput() {
 void ParseGrammar() {
     try {
         ClearOutput();
-        grammar = std::make_unique<syngt::Grammar>();
         
-        syngt::Parser parser;
-        parser.Parse(grammarText, *grammar);
+        // Создаем временный файл для парсинга
+        std::string tempFile = "temp_grammar.grm";
+        SaveTextFile(tempFile.c_str(), grammarText);
+        
+        grammar = std::make_unique<syngt::Grammar>();
+        grammar->load(tempFile);
+        
+        std::remove(tempFile.c_str());
         
         AppendOutput("✓ Grammar parsed successfully!\n\n");
         
         // Выводим статистику
         char stats[512];
         snprintf(stats, sizeof(stats), 
-                 "Terminals: %zu\nNon-terminals: %zu\nSemantics: %zu\nMacros: %zu\n",
-                 grammar->getTerminals().GetCount(),
-                 grammar->getNonTerminals().GetCount(),
-                 grammar->getSemantics().GetCount(),
-                 grammar->getMacros().GetCount());
+                "Terminals: %d\nNon-terminals: %zu\nSemantics: %d\nMacros: %d\n",
+                grammar->terminals()->getCount(),           // int -> %d
+                grammar->getNonTerminals().size(),          // size_t -> %zu
+                grammar->semantics()->getCount(),           // int -> %d
+                grammar->macros()->getCount());             // int -> %d
         AppendOutput(stats);
         
     } catch (const std::exception& e) {
@@ -207,11 +212,14 @@ void EliminateLeftRecursion() {
     
     try {
         ClearOutput();
-        syngt::LeftElimination eliminator;
-        eliminator.EliminateLeftRecursion(*grammar);
+        syngt::LeftElimination::eliminate(grammar.get());
         
-        // Обновляем текст грамматики
-        std::string newGrammar = grammar->ToString();
+        // Сохраняем результат обратно в текст
+        std::string tempFile = "temp_result.grm";
+        grammar->save(tempFile);
+        std::string newGrammar = LoadTextFile(tempFile.c_str());
+        std::remove(tempFile.c_str());
+        
         if (newGrammar.size() < sizeof(grammarText)) {
             strcpy_s(grammarText, sizeof(grammarText), newGrammar.c_str());
         }
@@ -234,11 +242,14 @@ void LeftFactorize() {
     
     try {
         ClearOutput();
-        syngt::LeftFactorization factorizer;
-        factorizer.Factorize(*grammar);
+        syngt::LeftFactorization::factorizeAll(grammar.get());
         
-        // Обновляем текст грамматики
-        std::string newGrammar = grammar->ToString();
+        // Сохраняем результат
+        std::string tempFile = "temp_result.grm";
+        grammar->save(tempFile);
+        std::string newGrammar = LoadTextFile(tempFile.c_str());
+        std::remove(tempFile.c_str());
+        
         if (newGrammar.size() < sizeof(grammarText)) {
             strcpy_s(grammarText, sizeof(grammarText), newGrammar.c_str());
         }
@@ -261,11 +272,14 @@ void RemoveUselessSymbols() {
     
     try {
         ClearOutput();
-        syngt::RemoveUseless remover;
-        remover.RemoveUseless(*grammar);
+        syngt::RemoveUseless::remove(grammar.get());
         
-        // Обновляем текст грамматики
-        std::string newGrammar = grammar->ToString();
+        // Сохраняем результат
+        std::string tempFile = "temp_result.grm";
+        grammar->save(tempFile);
+        std::string newGrammar = LoadTextFile(tempFile.c_str());
+        std::remove(tempFile.c_str());
+        
         if (newGrammar.size() < sizeof(grammarText)) {
             strcpy_s(grammarText, sizeof(grammarText), newGrammar.c_str());
         }
@@ -290,19 +304,23 @@ void CheckLL1() {
         ClearOutput();
         
         // Вычисляем First и Follow
-        syngt::FirstFollow ff;
-        auto firstSets = ff.ComputeFirst(*grammar);
-        auto followSets = ff.ComputeFollow(*grammar);
+        auto firstSets = syngt::FirstFollow::computeFirst(grammar.get());
+        auto followSets = syngt::FirstFollow::computeFollow(grammar.get(), firstSets);
         
-        // Проверяем LL(1)
-        syngt::ParsingTable table;
-        bool isLL1 = table.IsLL1(*grammar, firstSets, followSets);
+        // Строим таблицу разбора
+        auto table = syngt::ParsingTable::build(grammar.get());
         
-        if (isLL1) {
+        if (table->getConflicts().empty()) {
             AppendOutput("✓ Grammar IS LL(1)!\n\n");
         } else {
             AppendOutput("✗ Grammar IS NOT LL(1)!\n\n");
-            AppendOutput("Conflicts detected in parsing table.\n");
+            AppendOutput("Conflicts:\n");
+            for (const auto& conflict : table->getConflicts()) {
+                AppendOutput("  ");
+                AppendOutput(conflict.c_str());
+                AppendOutput("\n");
+            }
+            AppendOutput("\n");
         }
         
         // Выводим First sets
@@ -313,9 +331,13 @@ void CheckLL1() {
             AppendOutput(line);
             
             bool first = true;
-            for (const auto& sym : firstSet) {
+            for (int termId : firstSet) {
                 if (!first) AppendOutput(", ");
-                AppendOutput(sym.c_str());
+                if (termId == 0) {
+                    AppendOutput("ε");
+                } else {
+                    AppendOutput(grammar->terminals()->getString(termId).c_str());
+                }
                 first = false;
             }
             AppendOutput(" }\n");
@@ -328,9 +350,13 @@ void CheckLL1() {
             AppendOutput(line);
             
             bool first = true;
-            for (const auto& sym : followSet) {
+            for (int termId : followSet) {
                 if (!first) AppendOutput(", ");
-                AppendOutput(sym.c_str());
+                if (termId == -1) {
+                    AppendOutput("$");
+                } else {
+                    AppendOutput(grammar->terminals()->getString(termId).c_str());
+                }
                 first = false;
             }
             AppendOutput(" }\n");

@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(BUILD_CLI "Build console application" ON)
-option(BUILD_GUI "Build Qt GUI application" OFF)
+option(BUILD_GUI "Build Qt GUI application" ON)
 option(BUILD_TESTS "Build unit tests" ON)
 option(BUILD_EXAMPLES "Build examples" ON)
 

@@ -53,6 +53,7 @@ if(WIN32)
             d3d11
             dxgi
             d3dcompiler
+            dwmapi
     )
 endif()
 
