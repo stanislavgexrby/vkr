@@ -21,13 +21,8 @@ out/
 *.a
 *.lib
 
-# Qt
-*.pro.user
-*.qmlc
-*.jsc
-moc_*.cpp
-ui_*.h
-qrc_*.cpp
+# git
+syngt_gui/imgui
 
 # Logs
 *.log
