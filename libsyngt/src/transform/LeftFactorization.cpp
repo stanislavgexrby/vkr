@@ -9,6 +9,8 @@
 #include <syngt/regex/REAnd.h>
 #include <algorithm>
 
+#include <iostream>
+
 namespace syngt {
 
 void LeftFactorization::factorizeAll(Grammar* grammar) {
@@ -85,21 +87,29 @@ std::unique_ptr<RETree> LeftFactorization::findCommonPrefix(
 ) {
     if (!tree1 || !tree2) return nullptr;
     
-    // Если оба - And узлы, проверяем первые элементы
     auto and1 = dynamic_cast<const REAnd*>(tree1);
     auto and2 = dynamic_cast<const REAnd*>(tree2);
     
     if (and1 && and2) {
-        // Сравниваем левые части
         if (treesEqual(and1->left(), and2->left())) {
-            // Есть общий префикс - возвращаем его
-            return and1->left()->copy();
+            auto leftCopy = and1->left()->copy();
+            
+            // КЛЮЧЕВОЕ ИЗМЕНЕНИЕ: рекурсивный вызов для правых частей
+            auto rightPrefix = findCommonPrefix(and1->right(), and2->right());
+            
+            if (rightPrefix) {
+                return REAnd::make(std::move(leftCopy), std::move(rightPrefix));
+            } else {
+                return leftCopy;
+            }
         }
-    } else if (!and1 && !and2) {
-        // Оба - простые узлы, сравниваем напрямую
+        return nullptr;
+    } 
+    else if (!and1 && !and2) {
         if (treesEqual(tree1, tree2)) {
             return tree1->copy();
         }
+        return nullptr;
     }
     
     return nullptr;
@@ -231,16 +241,24 @@ std::unique_ptr<RETree> LeftFactorization::removePrefix(
 ) {
     if (!tree || !prefix) return nullptr;
     
-    // Если дерево - And и префикс совпадает с левой частью
-    if (auto andNode = dynamic_cast<const REAnd*>(tree)) {
-        if (treesEqual(andNode->left(), prefix)) {
-            // Возвращаем правую часть (суффикс)
-            return andNode->right()->copy();
+    if (treesEqual(tree, prefix)) {
+        return nullptr;
+    }
+    
+    auto andTree = dynamic_cast<const REAnd*>(tree);
+    auto andPrefix = dynamic_cast<const REAnd*>(prefix);
+    
+    if (andTree && andPrefix) {
+        if (treesEqual(andTree->left(), andPrefix->left())) {
+            // КЛЮЧЕВОЕ ИЗМЕНЕНИЕ: рекурсивный вызов
+            return removePrefix(andTree->right(), andPrefix->right());
         }
     }
     
-    if (treesEqual(tree, prefix)) {
-        return nullptr;
+    if (andTree && !andPrefix) {
+        if (treesEqual(andTree->left(), prefix)) {
+            return andTree->right()->copy();
+        }
     }
     
     return tree->copy();

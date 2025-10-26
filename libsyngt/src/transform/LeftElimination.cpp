@@ -58,6 +58,17 @@ bool LeftElimination::hasDirectLeftRecursion(NTListItem* nt) {
     return isLeftRecursive(root, nt);
 }
 
+static void collectAlternativesFlat(const RETree* root, std::vector<const RETree*>& alternatives) {
+    if (!root) return;
+    
+    if (auto orNode = dynamic_cast<const REOr*>(root)) {
+        collectAlternativesFlat(orNode->left(), alternatives);
+        collectAlternativesFlat(orNode->right(), alternatives);
+    } else {
+        alternatives.push_back(root);
+    }
+}
+
 void LeftElimination::collectAlphaAndBeta(
     const RETree* root,
     const NTListItem* nt,
@@ -66,28 +77,17 @@ void LeftElimination::collectAlphaAndBeta(
 ) {
     if (!root) return;
     
-    // Если это альтернатива (Or)
-    if (auto orNode = dynamic_cast<const REOr*>(root)) {
-        // Обрабатываем левую часть
-        if (isLeftRecursive(orNode->left(), nt)) {
-            // Рекурсивная альтернатива → добавляем в alpha
-            auto alpha = extractAlpha(orNode->left(), nt);
+    // Сначала собираем ВСЕ альтернативы в плоский список
+    std::vector<const RETree*> alternatives;
+    collectAlternativesFlat(root, alternatives);
+    
+    // Теперь для каждой альтернативы проверяем леворекурсивность
+    for (const RETree* alt : alternatives) {
+        if (isLeftRecursive(alt, nt)) {
+            auto alpha = extractAlpha(alt, nt);
             alphaList.push_back(std::move(alpha));
         } else {
-            // Нерекурсивная альтернатива → добавляем в beta
-            betaList.push_back(orNode->left()->copy());
-        }
-        
-        // Рекурсивно обрабатываем правую часть
-        collectAlphaAndBeta(orNode->right(), nt, alphaList, betaList);
-    }
-    else {
-        // Одиночное правило
-        if (isLeftRecursive(root, nt)) {
-            auto alpha = extractAlpha(root, nt);
-            alphaList.push_back(std::move(alpha));
-        } else {
-            betaList.push_back(root->copy());
+            betaList.push_back(alt->copy());
         }
     }
 }
