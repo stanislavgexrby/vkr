@@ -7,12 +7,16 @@
 #include <commdlg.h>
 
 #include <syngt/core/Grammar.h>
+#include <syngt/core/NTListItem.h>
 #include <syngt/parser/Parser.h>
 #include <syngt/transform/LeftElimination.h>
 #include <syngt/transform/LeftFactorization.h>
 #include <syngt/transform/RemoveUseless.h>
 #include <syngt/transform/FirstFollow.h>
 #include <syngt/analysis/ParsingTable.h>
+#include <syngt/utils/UndoRedo.h>
+#include <syngt/utils/Creator.h>
+#include <syngt/graphics/DrawObject.h>
 
 #include <fstream>
 #include <sstream>
@@ -36,6 +40,10 @@ static char grammarText[1024 * 64] = ""; // 64KB для грамматики
 static char outputText[1024 * 64] = "";
 static char currentFile[MAX_PATH] = "";
 static std::unique_ptr<syngt::Grammar> grammar;
+static syngt::UndoRedo undoRedo;
+static std::unique_ptr<syngt::graphics::DrawObjectList> drawObjects;
+static int activeNTIndex = 0;
+static syngt::SelectionMask selectionMask;
 static bool showAbout = false;
 static bool showHelp = false;
 
@@ -104,6 +112,211 @@ void ClearOutput() {
     outputText[0] = '\0';
 }
 
+// Undo/Redo функции
+void SaveCurrentState() {
+    if (!grammar) return;
+    
+    auto nts = grammar->getNonTerminals();
+    std::vector<std::string> names;
+    std::vector<std::string> values;
+    
+    for (const auto& ntName : nts) {
+        names.push_back(ntName);
+        syngt::NTListItem* item = grammar->getNTItem(ntName);
+        if (item) {
+            values.push_back(item->value());
+        } else {
+            values.push_back("");
+        }
+    }
+    
+    undoRedo.addState(names, values, activeNTIndex, selectionMask);
+}
+
+void Undo() {
+    if (!grammar || !undoRedo.canUndo()) {
+        ClearOutput();
+        AppendOutput("✗ Cannot undo!\n");
+        return;
+    }
+    
+    std::vector<std::string> names;
+    std::vector<std::string> values;
+    int index;
+    syngt::SelectionMask selection;
+    
+    if (undoRedo.stepBack(names, values, index, selection)) {
+        grammar->fillNew();
+        
+        for (size_t i = 0; i < names.size() && i < values.size(); ++i) {
+            grammar->addNonTerminal(names[i]);
+            grammar->setNTRule(names[i], values[i]);
+        }
+        
+        activeNTIndex = index;
+        selectionMask = selection;
+        
+        // Обновляем текстовое представление
+        std::string tempFile = "temp_undo.grm";
+        grammar->save(tempFile);
+        std::string newText = LoadTextFile(tempFile.c_str());
+        std::remove(tempFile.c_str());
+        
+        if (newText.size() < sizeof(grammarText)) {
+            strcpy_s(grammarText, sizeof(grammarText), newText.c_str());
+        }
+        
+        ClearOutput();
+        AppendOutput("✓ Undo successful\n");
+    }
+}
+
+void Redo() {
+    if (!grammar || !undoRedo.canRedo()) {
+        ClearOutput();
+        AppendOutput("✗ Cannot redo!\n");
+        return;
+    }
+    
+    std::vector<std::string> names;
+    std::vector<std::string> values;
+    int index;
+    syngt::SelectionMask selection;
+    
+    if (undoRedo.stepForward(names, values, index, selection)) {
+        grammar->fillNew();
+        
+        for (size_t i = 0; i < names.size() && i < values.size(); ++i) {
+            grammar->addNonTerminal(names[i]);
+            grammar->setNTRule(names[i], values[i]);
+        }
+        
+        activeNTIndex = index;
+        selectionMask = selection;
+        
+        // Обновляем текстовое представление
+        std::string tempFile = "temp_redo.grm";
+        grammar->save(tempFile);
+        std::string newText = LoadTextFile(tempFile.c_str());
+        std::remove(tempFile.c_str());
+        
+        if (newText.size() < sizeof(grammarText)) {
+            strcpy_s(grammarText, sizeof(grammarText), newText.c_str());
+        }
+        
+        ClearOutput();
+        AppendOutput("✓ Redo successful\n");
+    }
+}
+
+// Визуализация диаграмм
+void RenderDiagram(ImDrawList* drawList, const ImVec2& offset) {
+    if (!drawObjects || drawObjects->count() == 0) return;
+    
+    const float scale = 1.0f;
+    const ImU32 lineColor = IM_COL32(200, 200, 200, 255);
+    const ImU32 textColor = IM_COL32(255, 255, 255, 255);
+    
+    // Рисуем все объекты
+    for (int i = 0; i < drawObjects->count(); ++i) {
+        syngt::graphics::DrawObject* obj = (*drawObjects)[i];
+        if (!obj) continue;
+        
+        float x = offset.x + obj->x() * scale;
+        float y = offset.y + obj->y() * scale;
+        
+        int type = obj->getType();
+        
+        // Рисуем в зависимости от типа
+        if (type == syngt::graphics::ctDrawObjectTerminal) {
+            // Терминал - овал
+            float w = obj->getLength() * scale / 2.0f;
+            float h = 20.0f * scale;
+            drawList->AddEllipse(ImVec2(x + w, y), ImVec2(w, h), lineColor, 0, 0, 2.0f);
+            
+            // Текст
+            auto leaf = dynamic_cast<syngt::graphics::DrawObjectLeaf*>(obj);
+            if (leaf) {
+                std::string name = leaf->name();
+                ImVec2 textSize = ImGui::CalcTextSize(name.c_str());
+                drawList->AddText(ImVec2(x + w - textSize.x/2, y - textSize.y/2), textColor, name.c_str());
+            }
+        }
+        else if (type == syngt::graphics::ctDrawObjectNonTerminal) {
+            // Нетерминал - прямоугольник
+            float w = obj->getLength() * scale;
+            float h = 40.0f * scale;
+            drawList->AddRect(ImVec2(x, y - h/2), ImVec2(x + w, y + h/2), lineColor, 0.0f, 0, 2.0f);
+            
+            auto leaf = dynamic_cast<syngt::graphics::DrawObjectLeaf*>(obj);
+            if (leaf) {
+                std::string name = leaf->name();
+                ImVec2 textSize = ImGui::CalcTextSize(name.c_str());
+                drawList->AddText(ImVec2(x + w/2 - textSize.x/2, y - textSize.y/2), textColor, name.c_str());
+            }
+        }
+        else if (type == syngt::graphics::ctDrawObjectFirst) {
+            // Начало - треугольник
+            drawList->AddTriangleFilled(
+                ImVec2(x, y - 10),
+                ImVec2(x, y + 10),
+                ImVec2(x + 15, y),
+                lineColor
+            );
+        }
+        else if (type == syngt::graphics::ctDrawObjectLast) {
+            // Конец - треугольник
+            drawList->AddTriangleFilled(
+                ImVec2(x + 15, y - 10),
+                ImVec2(x + 15, y + 10),
+                ImVec2(x, y),
+                lineColor
+            );
+        }
+        
+        // Рисуем входящую стрелку
+        syngt::graphics::Arrow* arrow = obj->inArrow();
+        if (arrow && arrow->getFromDO()) {
+            syngt::graphics::DrawObject* from = dynamic_cast<syngt::graphics::DrawObject*>(arrow->getFromDO());
+            if (from) {
+                float x1 = offset.x + from->endX() * scale;
+                float y1 = offset.y + from->y() * scale;
+                float x2 = x;
+                float y2 = y;
+                drawList->AddLine(ImVec2(x1, y1), ImVec2(x2, y2), lineColor, 2.0f);
+            }
+        }
+    }
+}
+
+void UpdateDiagram() {
+    if (!grammar) {
+        drawObjects.reset();
+        return;
+    }
+    
+    // Получаем активный нетерминал
+    auto nts = grammar->getNonTerminals();
+    if (activeNTIndex < 0 || activeNTIndex >= static_cast<int>(nts.size())) {
+        activeNTIndex = 0;
+    }
+    
+    if (nts.empty()) {
+        drawObjects.reset();
+        return;
+    }
+    
+    syngt::NTListItem* item = grammar->getNTItem(nts[activeNTIndex]);
+    if (!item || !item->hasRoot()) {
+        drawObjects.reset();
+        return;
+    }
+    
+    // Создаем визуализацию
+    drawObjects = std::make_unique<syngt::graphics::DrawObjectList>(grammar.get());
+    syngt::Creator::createDrawObjects(drawObjects.get(), item->root(), grammar.get());
+}
+
 // Операции с грамматикой
 void ParseGrammar() {
     try {
@@ -123,12 +336,18 @@ void ParseGrammar() {
         // Выводим статистику
         char stats[512];
         snprintf(stats, sizeof(stats), 
-                "Terminals: %d\nNon-terminals: %zu\nSemantics: %d\nMacros: %d\n",
-                grammar->terminals()->getCount(),           // int -> %d
-                grammar->getNonTerminals().size(),          // size_t -> %zu
-                grammar->semantics()->getCount(),           // int -> %d
-                grammar->macros()->getCount());             // int -> %d
+                 "Terminals: %d\nNon-terminals: %zu\nSemantics: %d\nMacros: %d\n",
+                 grammar->terminals()->getCount(),
+                 grammar->getNonTerminals().size(),
+                 grammar->semantics()->getCount(),
+                 grammar->macros()->getCount());
         AppendOutput(stats);
+        
+        // Сохраняем состояние для Undo/Redo
+        SaveCurrentState();
+        
+        // Обновляем диаграмму
+        UpdateDiagram();
         
     } catch (const std::exception& e) {
         ClearOutput();
@@ -136,6 +355,7 @@ void ParseGrammar() {
         AppendOutput(e.what());
         AppendOutput("\n");
         grammar.reset();
+        drawObjects.reset();
     }
 }
 
@@ -225,6 +445,10 @@ void EliminateLeftRecursion() {
         }
         
         AppendOutput("✓ Left recursion eliminated!\n");
+        
+        // Сохраняем состояние и обновляем диаграмму
+        SaveCurrentState();
+        UpdateDiagram();
     } catch (const std::exception& e) {
         ClearOutput();
         AppendOutput("✗ Error:\n");
@@ -255,6 +479,9 @@ void LeftFactorize() {
         }
         
         AppendOutput("✓ Left factorization completed!\n");
+        
+        SaveCurrentState();
+        UpdateDiagram();
     } catch (const std::exception& e) {
         ClearOutput();
         AppendOutput("✗ Error:\n");
@@ -285,6 +512,9 @@ void RemoveUselessSymbols() {
         }
         
         AppendOutput("✓ Useless symbols removed!\n");
+        
+        SaveCurrentState();
+        UpdateDiagram();
     } catch (const std::exception& e) {
         ClearOutput();
         AppendOutput("✗ Error:\n");
@@ -483,6 +713,11 @@ int main(int, char**)
                 if (ImGui::MenuItem("Exit", "Alt+F4")) done = true;
                 ImGui::EndMenu();
             }
+            if (ImGui::BeginMenu("Edit")) {
+                if (ImGui::MenuItem("Undo", "Ctrl+Z", false, undoRedo.canUndo())) Undo();
+                if (ImGui::MenuItem("Redo", "Ctrl+Y", false, undoRedo.canRedo())) Redo();
+                ImGui::EndMenu();
+            }
             if (ImGui::BeginMenu("Grammar")) {
                 if (ImGui::MenuItem("Parse", "F5")) ParseGrammar();
                 ImGui::Separator();
@@ -520,20 +755,86 @@ int main(int, char**)
         // Splitter
         static float leftWidth = io.DisplaySize.x * 0.55f;
         
-        // Левая панель - редактор грамматики
+        // Левая панель - редактор грамматики и диаграмма
         ImGui::BeginChild("LeftPanel", ImVec2(leftWidth, 0), true);
         
-        ImGui::Text("Grammar Editor");
-        ImGui::SameLine();
-        if (ImGui::Button("Parse (F5)")) ParseGrammar();
-        ImGui::SameLine();
-        if (ImGui::Button("Clear")) { grammarText[0] = '\0'; ClearOutput(); }
-        
-        ImGui::Separator();
-        
-        ImGui::InputTextMultiline("##grammar", grammarText, sizeof(grammarText), 
-                                   ImVec2(-FLT_MIN, -FLT_MIN),
-                                   ImGuiInputTextFlags_AllowTabInput);
+        // Вкладки
+        if (ImGui::BeginTabBar("LeftTabs")) {
+            // Вкладка редактора
+            if (ImGui::BeginTabItem("Grammar Editor")) {
+                ImGui::Text("Editor");
+                ImGui::SameLine();
+                if (ImGui::Button("Parse (F5)")) ParseGrammar();
+                ImGui::SameLine();
+                if (ImGui::Button("Clear")) { grammarText[0] = '\0'; ClearOutput(); }
+                
+                ImGui::Separator();
+                
+                ImGui::InputTextMultiline("##grammar", grammarText, sizeof(grammarText), 
+                                           ImVec2(-FLT_MIN, -FLT_MIN),
+                                           ImGuiInputTextFlags_AllowTabInput);
+                
+                ImGui::EndTabItem();
+            }
+            
+            // Вкладка диаграммы
+            if (ImGui::BeginTabItem("Syntax Diagram")) {
+                // Список нетерминалов для выбора
+                if (grammar && !grammar->getNonTerminals().empty()) {
+                    auto nts = grammar->getNonTerminals();
+                    
+                    ImGui::Text("Select non-terminal:");
+                    ImGui::SameLine();
+                    
+                    if (activeNTIndex < 0 || activeNTIndex >= static_cast<int>(nts.size())) {
+                        activeNTIndex = 0;
+                    }
+                    
+                    if (ImGui::BeginCombo("##nt_select", nts[activeNTIndex].c_str())) {
+                        for (int i = 0; i < static_cast<int>(nts.size()); ++i) {
+                            bool is_selected = (activeNTIndex == i);
+                            if (ImGui::Selectable(nts[i].c_str(), is_selected)) {
+                                activeNTIndex = i;
+                                UpdateDiagram();
+                            }
+                            if (is_selected) {
+                                ImGui::SetItemDefaultFocus();
+                            }
+                        }
+                        ImGui::EndCombo();
+                    }
+                    
+                    ImGui::Separator();
+                    
+                    // Область для рисования диаграммы
+                    ImGui::BeginChild("DiagramCanvas", ImVec2(0, 0), false);
+                    
+                    if (drawObjects && drawObjects->count() > 0) {
+                        ImDrawList* drawList = ImGui::GetWindowDrawList();
+                        ImVec2 canvasPos = ImGui::GetCursorScreenPos();
+                        ImVec2 canvasSize = ImGui::GetContentRegionAvail();
+                        
+                        // Белый фон
+                        drawList->AddRectFilled(canvasPos, 
+                                               ImVec2(canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y),
+                                               IM_COL32(30, 30, 35, 255));
+                        
+                        // Рисуем диаграмму
+                        RenderDiagram(drawList, ImVec2(canvasPos.x + 20, canvasPos.y + 50));
+                    } else {
+                        ImGui::Text("No diagram to display. Parse grammar first.");
+                    }
+                    
+                    ImGui::EndChild();
+                } else {
+                    ImGui::Text("Parse grammar to see diagrams");
+                }
+                
+                ImGui::EndTabItem();
+            }
+            
+            ImGui::EndTabBar();
+        }
         
         ImGui::EndChild();
 
