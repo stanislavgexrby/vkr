@@ -1,0 +1,14 @@
+{ Грамматика с общими префиксами }
+{ НЕ LL(1) - требуется левая факторизация }
+{ Операторы if-then и if-then-else }
+
+S : stmt.
+stmt : ifstmt ; assignment ; block.
+ifstmt : 'if' , condition , 'then' , stmt ; 'if' , condition , 'then' , stmt , 'else' , stmt.
+condition : '(' , expr , ')'.
+expr : ID ; ID , '==' , ID ; ID , '>' , ID.
+assignment : ID , '=' , expr.
+block : 'begin' , stmtlist , 'end'.
+stmtlist : stmt , @*(',' , stmt).
+
+EOGram!

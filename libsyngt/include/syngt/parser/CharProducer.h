@@ -8,8 +8,6 @@ namespace syngt {
  * 
  * Последовательно читает символы из строки.
  * Используется парсером для разбора грамматик.
- * 
- * Соответствует Pascal: TCharProducer
  */
 class CharProducer {
 private:

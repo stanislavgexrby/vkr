@@ -1,0 +1,26 @@
+{ Сложная грамматика с несколькими проблемами }
+{ Левая рекурсия + общие префиксы + бесполезные символы }
+{ Требуется полная регуляризация }
+
+S : program.
+program : stmts.
+stmts : stmts , stmt ; stmt.
+stmt : assign ; ifstmt ; whilestmt ; forstmt.
+assign : ID , '=' , expr.
+ifstmt : 'if' , expr , block ; 'if' , expr , block , 'else' , block.
+whilestmt : 'while' , expr , block.
+forstmt : 'for' , ID , 'in' , range , block.
+block : '{' , stmts , '}' ; '{' , '}'.
+range : NUM , '..' , NUM.
+expr : expr , '+' , term ; expr , '-' , term ; term.
+term : term , '*' , factor ; term , '/' , factor ; factor.
+factor : '(' , expr , ')' ; ID ; NUM ; call.
+call : ID , '(' , args , ')'.
+args : expr , @*(',' , expr) ; @.
+
+{ Бесполезный нетерминал - никогда не используется }
+useless : 'never' , 'used'.
+{ Бесполезный нетерминал - не может вывести терминалы }
+infinite : infinite , 'x'.
+
+EOGram!

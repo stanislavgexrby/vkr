@@ -1,7 +1,7 @@
 #pragma once
+#include <syngt/core/Types.h>
 #include <string>
 #include <vector>
-#include <syngt/core/Types.h>
 
 /**
  * @brief Словарь типов грамматики

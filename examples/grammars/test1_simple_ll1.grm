@@ -1,0 +1,11 @@
+{ Простая LL(1) грамматика }
+{ Уже в правильной форме, не требует трансформаций }
+{ Описывает простые объявления переменных }
+
+S : declarations.
+declarations : declaration , @*(',' , declaration).
+declaration : type , identifier.
+type : 'int' ; 'float' ; 'string'.
+identifier : ID.
+
+EOGram!

@@ -1,0 +1,7 @@
+S : expr .
+expr : term,expr_rec .
+term : factor,term_rec .
+factor : '(',expr,')';ID;NUM .
+expr_rec : expr_rec;@ .
+term_rec : term_rec;@ .
+EOGram!

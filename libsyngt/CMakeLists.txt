@@ -24,6 +24,7 @@ set(LIBSYNGT_SOURCES
     
     # Parser
     src/parser/Parser.cpp
+    src/parser/Parser2.cpp
     
     # Transform
     src/transform/LeftElimination.cpp

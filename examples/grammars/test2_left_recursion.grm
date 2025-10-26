@@ -1,0 +1,10 @@
+{ Грамматика с левой рекурсией }
+{ НЕ LL(1) - требуется устранение левой рекурсии }
+{ Арифметические выражения с приоритетами }
+
+S : expr.
+expr : expr , '+' , term ; expr , '-' , term ; term.
+term : term , '*' , factor ; term , '/' , factor ; factor.
+factor : '(' , expr , ')' ; ID ; NUM.
+
+EOGram!

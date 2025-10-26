@@ -49,6 +49,18 @@ public:
         return firstOk && secondOk;
     }
     
+    int getOperationCount() const override {
+        int leftCount = m_first ? m_first->getOperationCount() : 0;
+        int rightCount = m_second ? m_second->getOperationCount() : 0;
+        
+        int result = leftCount;
+        if (result == 0) result++;
+        if (rightCount == 0) result++;
+        result += rightCount;
+        
+        return result;
+    }
+
     std::string toString(const SelectionMask& mask, bool reverse) const override {
         if (!m_first || !m_second) {
             return "";

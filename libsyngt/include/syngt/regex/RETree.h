@@ -75,6 +75,8 @@ public:
      * @brief Все ли определения были закрыты
      */
     virtual bool allDefinitionWasClosed() const { return true; }
+
+    virtual int getOperationCount() const = 0;
     
     int drawObj() const { return m_drawObj; }
     void setDrawObj(int index) { m_drawObj = index; }

@@ -1,0 +1,12 @@
+{ Правильная LL(1) грамматика арифметических выражений }
+{ Уже без левой рекурсии, с правильными приоритетами }
+{ Приоритеты: () > * / > + - }
+
+S : expr.
+expr : term , exprprime.
+exprprime : '+' , term , exprprime ; '-' , term , exprprime ; @.
+term : factor , termprime.
+termprime : '*' , factor , termprime ; '/' , factor , termprime ; @.
+factor : '(' , expr , ')' ; ID ; NUM.
+
+EOGram!

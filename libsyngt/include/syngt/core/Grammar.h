@@ -44,6 +44,8 @@ public:
      */
     void load(const std::string& filename);
     
+    void importFromGEdit(const std::string& filename);
+
     /**
      * @brief Сохранить грамматику в файл
      * @param filename Путь к файлу .grm

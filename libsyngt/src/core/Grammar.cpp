@@ -1,5 +1,6 @@
 #include <syngt/core/Grammar.h>
 #include <syngt/parser/Parser.h>
+#include <syngt/parser/Parser2.h>
 #include <syngt/core/NTListItem.h>
 #include <syngt/transform/LeftElimination.h>
 #include <syngt/transform/LeftFactorization.h>
@@ -66,6 +67,60 @@ void Grammar::load(const std::string& filename) {
         
         int ntId = addNonTerminal(name);
         (void)ntId;
+        
+        try {
+            auto tree = parser.parse(rule, this);
+            setNTRoot(name, std::move(tree));
+        } catch (const std::exception& e) {
+            std::cerr << "Failed to parse rule for '" << name << "': " << e.what() << "\n";
+            std::cerr << "  Rule was: " << rule << "\n";
+        }
+    }
+    
+    file.close();
+}
+
+void Grammar::importFromGEdit(const std::string& filename) {
+    std::ifstream file(filename);
+    if (!file.is_open()) {
+        throw std::runtime_error("Cannot open file: " + filename);
+    }
+    
+    fillNew();  // Инициализация
+    
+    Parser2 parser;
+    std::string line;
+    
+    while (std::getline(file, line)) {
+        // Преобразуем к верхнему регистру для проверки
+        std::string upperLine = line;
+        for (char& c : upperLine) {
+            c = std::toupper(static_cast<unsigned char>(c));
+        }
+        
+        if (upperLine.find("EOGRAM") != std::string::npos) {
+            break;
+        }
+        
+        if (line.empty() || line[0] == '{' || line[0] == '/') {
+            continue;
+        }
+        
+        size_t colonPos = line.find(':');
+        if (colonPos == std::string::npos) {
+            continue;
+        }
+        
+        std::string name = line.substr(0, colonPos);
+        name.erase(0, name.find_first_not_of(" \t"));
+        name.erase(name.find_last_not_of(" \t") + 1);
+        
+        std::string rule = line.substr(colonPos + 1);
+        
+        int ntId = findNonTerminal(name);
+        if (ntId < 0) {
+            ntId = addNonTerminal(name);
+        }
         
         try {
             auto tree = parser.parse(rule, this);
