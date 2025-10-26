@@ -8,6 +8,8 @@
 #include <syngt/regex/REOr.h>
 #include <syngt/regex/REAnd.h>
 #include <algorithm>
+#include <map>
+#include <set>
 
 #include <iostream>
 
@@ -28,40 +30,40 @@ void LeftFactorization::factorizeAll(Grammar* grammar) {
 void LeftFactorization::factorize(NTListItem* nt, Grammar* grammar) {
     if (!nt || !grammar) return;
     
-    // Повторяем факторизацию пока есть изменения (как в Pascal)
-    const int maxIterations = 10;  // Защита от бесконечного цикла
+    // Повторяем факторизацию пока есть изменения
+    const int maxIterations = 10;
     
     for (int iteration = 0; iteration < maxIterations; ++iteration) {
         RETree* root = nt->root();
-        if (!root) return;
+        if (!root) {
+            return;
+        }
         
         // Собираем все альтернативы
         std::vector<const RETree*> alternatives;
         collectAlternatives(root, alternatives);
         
-        // Если альтернатив меньше 2 - факторизовать нечего
-        if (alternatives.size() < 2) return;
-        
-        // Проверяем наличие общих префиксов
-        if (!hasCommonPrefixes(alternatives)) {
-            return;  // Нет общих префиксов - выходим
+        if (alternatives.size() < 2) {
+            return;
         }
         
-        // Группируем по общим префиксам
+        if (!hasCommonPrefixes(alternatives)) {
+            return;
+        }
+        
+        // Группировка
         auto groups = groupByPrefix(alternatives);
         
-        // Если группировка не дала результата - выходим
         if (groups.size() == alternatives.size()) {
-            return;  // Каждая альтернатива в своей группе - нет факторизации
+            return;
         }
         
-        // Строим новое правило
         auto newRule = buildFactorizedRule(groups, grammar);
-        if (!newRule) return;
+        if (!newRule) {
+            return;
+        }
         
         nt->setRoot(std::move(newRule));
-        
-        // Продолжаем следующую итерацию для рекурсивной факторизации
     }
 }
 
@@ -71,14 +73,34 @@ void LeftFactorization::collectAlternatives(
 ) {
     if (!root) return;
     
-    // Если это Or - рекурсивно собираем альтернативы
     if (auto orNode = dynamic_cast<const REOr*>(root)) {
         collectAlternatives(orNode->left(), alternatives);
         collectAlternatives(orNode->right(), alternatives);
     } else {
-        // Это одиночная альтернатива
         alternatives.push_back(root);
     }
+}
+
+// Развернуть And-цепочку в плоский список
+static void flattenAndChain(const RETree* root, std::vector<const RETree*>& result) {
+    if (auto andNode = dynamic_cast<const REAnd*>(root)) {
+        flattenAndChain(andNode->left(), result);
+        flattenAndChain(andNode->right(), result);
+    } else {
+        result.push_back(root);
+    }
+}
+
+// Собрать список обратно в And-цепочку
+static std::unique_ptr<RETree> buildAndChain(const std::vector<const RETree*>& list, size_t start, size_t end) {
+    if (start >= end) return nullptr;
+    if (start + 1 == end) return list[start]->copy();
+    
+    auto result = list[start]->copy();
+    for (size_t i = start + 1; i < end; ++i) {
+        result = REAnd::make(std::move(result), list[i]->copy());
+    }
+    return result;
 }
 
 std::unique_ptr<RETree> LeftFactorization::findCommonPrefix(
@@ -87,38 +109,27 @@ std::unique_ptr<RETree> LeftFactorization::findCommonPrefix(
 ) {
     if (!tree1 || !tree2) return nullptr;
     
-    auto and1 = dynamic_cast<const REAnd*>(tree1);
-    auto and2 = dynamic_cast<const REAnd*>(tree2);
+    // Развернуть обе в списки
+    std::vector<const RETree*> list1, list2;
+    flattenAndChain(tree1, list1);
+    flattenAndChain(tree2, list2);
     
-    if (and1 && and2) {
-        if (treesEqual(and1->left(), and2->left())) {
-            auto leftCopy = and1->left()->copy();
-            
-            // КЛЮЧЕВОЕ ИЗМЕНЕНИЕ: рекурсивный вызов для правых частей
-            auto rightPrefix = findCommonPrefix(and1->right(), and2->right());
-            
-            if (rightPrefix) {
-                return REAnd::make(std::move(leftCopy), std::move(rightPrefix));
-            } else {
-                return leftCopy;
-            }
-        }
-        return nullptr;
-    } 
-    else if (!and1 && !and2) {
-        if (treesEqual(tree1, tree2)) {
-            return tree1->copy();
-        }
-        return nullptr;
+    // Найти наибольший общий префикс
+    size_t commonLen = 0;
+    while (commonLen < list1.size() && commonLen < list2.size() &&
+           treesEqual(list1[commonLen], list2[commonLen])) {
+        commonLen++;
     }
     
-    return nullptr;
+    if (commonLen == 0) return nullptr;
+    
+    // Собрать обратно
+    return buildAndChain(list1, 0, commonLen);
 }
 
 bool LeftFactorization::hasCommonPrefixes(
     const std::vector<const RETree*>& alternatives
 ) {
-    // Проверяем каждую пару альтернатив
     for (size_t i = 0; i < alternatives.size(); ++i) {
         for (size_t j = i + 1; j < alternatives.size(); ++j) {
             auto prefix = findCommonPrefix(alternatives[i], alternatives[j]);
@@ -133,29 +144,53 @@ bool LeftFactorization::hasCommonPrefixes(
 std::vector<std::vector<const RETree*>> LeftFactorization::groupByPrefix(
     const std::vector<const RETree*>& alternatives
 ) {
-    std::vector<std::vector<const RETree*>> groups;
-    std::vector<bool> used(alternatives.size(), false);
+    // НОВЫЙ АЛГОРИТМ:
+    // 1. Находим все пары с общими префиксами
+    // 2. Группируем пары по одинаковому префиксу
+    // 3. Объединяем пересекающиеся группы
     
-    // Группируем альтернативы с одинаковыми префиксами
+    std::map<std::string, std::vector<const RETree*>> prefixMap;
+    std::set<const RETree*> processed;
+    
     for (size_t i = 0; i < alternatives.size(); ++i) {
-        if (used[i]) continue;
-        
-        std::vector<const RETree*> group;
-        group.push_back(alternatives[i]);
-        used[i] = true;
-        
-        // Ищем другие альтернативы с таким же префиксом
         for (size_t j = i + 1; j < alternatives.size(); ++j) {
-            if (used[j]) continue;
-            
             auto prefix = findCommonPrefix(alternatives[i], alternatives[j]);
             if (prefix) {
-                group.push_back(alternatives[j]);
-                used[j] = true;
+                SelectionMask emptyMask;
+                std::string prefixStr = prefix->toString(emptyMask, false);
+                
+                auto& group = prefixMap[prefixStr];
+                
+                // Добавляем обе альтернативы, если их ещё нет
+                if (std::find(group.begin(), group.end(), alternatives[i]) == group.end()) {
+                    group.push_back(alternatives[i]);
+                }
+                if (std::find(group.begin(), group.end(), alternatives[j]) == group.end()) {
+                    group.push_back(alternatives[j]);
+                }
+                
+                processed.insert(alternatives[i]);
+                processed.insert(alternatives[j]);
             }
         }
-        
-        groups.push_back(group);
+    }
+    
+    // Формируем итоговые группы
+    std::vector<std::vector<const RETree*>> groups;
+    
+    // Сначала добавляем группы с общими префиксами
+    for (auto& [prefixStr, group] : prefixMap) {
+        // Проверяем, что все элементы группы действительно имеют этот префикс
+        if (group.size() > 1) {
+            groups.push_back(std::move(group));
+        }
+    }
+    
+    // Затем добавляем одиночные альтернативы
+    for (const auto* alt : alternatives) {
+        if (processed.find(alt) == processed.end()) {
+            groups.push_back({alt});
+        }
     }
     
     return groups;
@@ -182,13 +217,12 @@ std::unique_ptr<RETree> LeftFactorization::buildFactorizedRule(
         } else if (group.size() > 1) {
             // Группа с общим префиксом - факторизуем
             
-            // Находим общий префикс (между первыми двумя)
+            // Находим общий префикс между первыми двумя элементами группы
             auto prefix = findCommonPrefix(group[0], group[1]);
-            if (!prefix) continue;  // Не должно случиться, но защита
+            if (!prefix) continue;
             
             // Создаем новый нетерминал для суффиксов
             std::string newName = "factored_" + std::to_string(grammar->getNonTerminals().size());
-
             grammar->addNonTerminal(newName);
             
             // Строим правило для нового нетерминала (суффиксы)
@@ -213,11 +247,11 @@ std::unique_ptr<RETree> LeftFactorization::buildFactorizedRule(
                 grammar->setNTRoot(newName, std::move(suffixRule));
             }
             
-            // Рекурсивно факторизуем новый нетерминал
-            NTListItem* newNT = grammar->getNTItem(newName);
-            if (newNT) {
-                factorize(newNT, grammar);  // ← Рекурсивный вызов!
-            }
+            // // Рекурсивно факторизуем новый нетерминал
+            // NTListItem* newNT = grammar->getNTItem(newName);
+            // if (newNT) {
+            //     factorize(newNT, grammar);
+            // }
             
             // Строим префикс + новый нетерминал
             int newNTId = grammar->findNonTerminal(newName);
@@ -241,27 +275,27 @@ std::unique_ptr<RETree> LeftFactorization::removePrefix(
 ) {
     if (!tree || !prefix) return nullptr;
     
-    if (treesEqual(tree, prefix)) {
+    // Развернуть оба в списки
+    std::vector<const RETree*> treeList, prefixList;
+    flattenAndChain(tree, treeList);
+    flattenAndChain(prefix, prefixList);
+    
+    // Проверяем что prefix действительно префикс
+    if (prefixList.size() > treeList.size()) return tree->copy();
+    
+    for (size_t i = 0; i < prefixList.size(); ++i) {
+        if (!treesEqual(treeList[i], prefixList[i])) {
+            return tree->copy();  // Не префикс
+        }
+    }
+    
+    // Если префикс == всё дерево, возвращаем nullptr (пустой суффикс)
+    if (prefixList.size() == treeList.size()) {
         return nullptr;
     }
     
-    auto andTree = dynamic_cast<const REAnd*>(tree);
-    auto andPrefix = dynamic_cast<const REAnd*>(prefix);
-    
-    if (andTree && andPrefix) {
-        if (treesEqual(andTree->left(), andPrefix->left())) {
-            // КЛЮЧЕВОЕ ИЗМЕНЕНИЕ: рекурсивный вызов
-            return removePrefix(andTree->right(), andPrefix->right());
-        }
-    }
-    
-    if (andTree && !andPrefix) {
-        if (treesEqual(andTree->left(), prefix)) {
-            return andTree->right()->copy();
-        }
-    }
-    
-    return tree->copy();
+    // Собираем суффикс
+    return buildAndChain(treeList, prefixList.size(), treeList.size());
 }
 
 bool LeftFactorization::treesEqual(const RETree* tree1, const RETree* tree2) {

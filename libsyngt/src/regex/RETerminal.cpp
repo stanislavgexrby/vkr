@@ -38,6 +38,10 @@ std::string RETerminal::toString(const SelectionMask& mask, bool reverse) const 
     
     std::string name = getNameFromID();
     
+    if (m_id == 0 || name.empty()) {
+        return "@";
+    }
+
     if (name == "ID" || name == "LETTER" || name == "DIGIT" || 
         name == "chars" || name == "digit" || name == "digits") {
         return name;

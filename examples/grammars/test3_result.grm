@@ -1,0 +1,11 @@
+S : stmt .
+stmt : ifstmt;assignment;block .
+ifstmt : 'if',condition,'then',stmt,factored_8 .
+assignment : ID,'=',expr .
+block : 'begin',stmtlist,'end' .
+condition : '(',expr,')' .
+expr : ID,factored_9 .
+stmtlist : stmt,'@'*',',stmt .
+factored_8 : @;'else',stmt .
+factored_9 : @;'==',ID;'>',ID .
+EOGram!

@@ -1,5 +1,6 @@
 #pragma once
 #include <syngt/regex/REBinaryOp.h>
+#include <syngt/regex/REOr.h>
 
 namespace syngt {
 
@@ -41,8 +42,16 @@ public:
             return "";
         }
         
-        return m_first->toString(mask, reverse) + '*' + 
-               m_second->toString(mask, reverse);
+        std::string result = m_first->toString(mask, reverse) + '*';
+        
+        // Добавляем скобки если m_second содержит Or
+        if (dynamic_cast<const REOr*>(m_second.get())) {
+            result += '(' + m_second->toString(mask, reverse) + ')';
+        } else {
+            result += m_second->toString(mask, reverse);
+        }
+        
+        return result;
     }
     
     static std::unique_ptr<REIteration> make(std::unique_ptr<RETree> first,

@@ -1,0 +1,2 @@
+program=init,main
+init=ID*
