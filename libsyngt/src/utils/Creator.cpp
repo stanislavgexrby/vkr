@@ -22,8 +22,7 @@ public:
 
 void createDrawObjects(
     graphics::DrawObjectList* list,
-    const RETree* tree,
-    Grammar*
+    const RETree* tree
 ) {
     if (!list || !tree) {
         return;
@@ -34,43 +33,40 @@ void createDrawObjects(
     
     // Создать первый объект (начало диаграммы)
     auto firstDO = std::make_unique<DrawObjectFirst>();
-    firstDO->place();  // Разместить в начальной позиции
+    firstDO->place();
     
-    // Сохраняем указатель на первый объект до перемещения
     DrawObjectFirst* firstPtr = firstDO.get();
     list->add(std::move(firstDO));
     
-    // Семантики (начальное значение nullptr)
+    // Семантики и высота
     SemanticIDList* semantics = nullptr;
     int height = 0;
     
-    // Построить диаграмму вправо
-    // TODO: Реализовать RETree::drawObjectsToRight()
-    // Пока просто установим prevDO = firstDO
-    DrawObject* prevDO = firstPtr;
+    // ========== ВОТ ЗДЕСЬ ВЫЗЫВАЕМ МЕТОД ДЕРЕВА ==========
+    DrawObject* prevDO = const_cast<RETree*>(tree)->drawObjectsToRight(
+        list, semantics, firstPtr, cwFORWARD, height
+    );
+    // =====================================================
     
-    // Создать последний объект (конец диаграммы)
-    auto lastDO = std::make_unique<DrawObjectLastHelper>();
+    // Создать последний объект
+    auto lastDO = std::make_unique<DrawObjectLast>();
     
     // Создать входящую стрелку
     std::unique_ptr<Arrow> inArrow;
     if (semantics == nullptr) {
         inArrow = std::make_unique<Arrow>(cwFORWARD, prevDO);
     } else {
-        // SemanticArrow с семантиками
-        auto semList = std::make_unique<SemanticIDList>(*semantics);
+        auto semList = std::unique_ptr<SemanticIDList>(semantics);
         inArrow = std::make_unique<SemanticArrow>(cwFORWARD, prevDO, std::move(semList));
     }
     
-    // Установить входящую стрелку
     lastDO->setInArrow(std::move(inArrow));
     
-    // Установить позицию последнего объекта через helper
+    // Установить позицию последнего объекта
     int lastX = prevDO->endX() + lastDO->inArrow()->getLength();
     int lastY = prevDO->y();
-    lastDO->setPositionPublic(lastX, lastY);
+    lastDO->setPositionForCreator(lastX, lastY);
     
-    // Сохраняем указатель перед перемещением
     DrawObjectLast* lastPtr = lastDO.get();
     list->add(std::move(lastDO));
     

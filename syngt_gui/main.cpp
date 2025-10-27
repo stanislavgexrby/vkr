@@ -314,7 +314,7 @@ void UpdateDiagram() {
     
     // Создаем визуализацию
     drawObjects = std::make_unique<syngt::graphics::DrawObjectList>(grammar.get());
-    syngt::Creator::createDrawObjects(drawObjects.get(), item->root(), grammar.get());
+    syngt::Creator::createDrawObjects(drawObjects.get(), item->root());
 }
 
 // Операции с грамматикой

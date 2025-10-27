@@ -40,7 +40,7 @@ TEST_F(IntegrationTest, ParseTransformVisualize) {
     
     // 4. Создаем визуализацию
     auto list = std::make_unique<DrawObjectList>(grammar.get());
-    Creator::createDrawObjects(list.get(), item->root(), grammar.get());
+    Creator::createDrawObjects(list.get(), item->root());
     
     EXPECT_GT(list->count(), 0);
     EXPECT_GT(list->width(), 0);
@@ -112,7 +112,7 @@ TEST_F(IntegrationTest, MultipleNonTerminals) {
     for (const auto& ntName : grammar->getNonTerminals()) {
         auto item = grammar->getNTItem(ntName);
         if (item && item->hasRoot()) {
-            Creator::createDrawObjects(list.get(), item->root(), grammar.get());
+            Creator::createDrawObjects(list.get(), item->root());
             EXPECT_GT(list->count(), 0);
         }
     }

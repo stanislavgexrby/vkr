@@ -16,6 +16,7 @@ set(LIBSYNGT_SOURCES
     src/regex/RESemantic.cpp
     src/regex/RENonTerminal.cpp
     src/regex/REBinaryOp.cpp
+    src/regex/REDrawing.cpp
     
     # Graphics
     src/graphics/Arrow.cpp

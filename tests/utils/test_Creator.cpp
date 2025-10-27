@@ -27,7 +27,7 @@ TEST_F(CreatorTest, CreateEmptyDiagram) {
     int termId = grammar->addTerminal("begin");
     auto tree = std::make_unique<RETerminal>(grammar.get(), termId);
     
-    Creator::createDrawObjects(list.get(), tree.get(), grammar.get());
+    Creator::createDrawObjects(list.get(), tree.get());
     
     // Должны быть First, Terminal, Last
     EXPECT_GE(list->count(), 2); // Минимум First и Last
@@ -44,7 +44,7 @@ TEST_F(CreatorTest, CreateSequence) {
     auto term2 = std::make_unique<RETerminal>(grammar.get(), id2);
     auto seq = REAnd::make(std::move(term1), std::move(term2));
     
-    Creator::createDrawObjects(list.get(), seq.get(), grammar.get());
+    Creator::createDrawObjects(list.get(), seq.get());
     
     EXPECT_GE(list->count(), 2); // First и Last минимум
     EXPECT_GT(list->width(), 40); // Минимальная ширина для двух элементов
@@ -59,7 +59,7 @@ TEST_F(CreatorTest, CreateAlternative) {
     auto term2 = std::make_unique<RETerminal>(grammar.get(), id2);
     auto alt = REOr::make(std::move(term1), std::move(term2));
     
-    Creator::createDrawObjects(list.get(), alt.get(), grammar.get());
+    Creator::createDrawObjects(list.get(), alt.get());
     
     EXPECT_GE(list->count(), 2);
     EXPECT_GT(list->width(), 0);
@@ -70,7 +70,7 @@ TEST_F(CreatorTest, DiagramSizePositive) {
     int termId = grammar->addTerminal("test");
     auto tree = std::make_unique<RETerminal>(grammar.get(), termId);
     
-    Creator::createDrawObjects(list.get(), tree.get(), grammar.get());
+    Creator::createDrawObjects(list.get(), tree.get());
     
     // Проверка что размеры положительные
     EXPECT_GT(list->width(), 0);
@@ -82,10 +82,10 @@ TEST_F(CreatorTest, MultipleCreations) {
     int termId = grammar->addTerminal("test");
     auto tree = std::make_unique<RETerminal>(grammar.get(), termId);
     
-    Creator::createDrawObjects(list.get(), tree.get(), grammar.get());
+    Creator::createDrawObjects(list.get(), tree.get());
     int count1 = list->count();
     
-    Creator::createDrawObjects(list.get(), tree.get(), grammar.get());
+    Creator::createDrawObjects(list.get(), tree.get());
     int count2 = list->count();
     
     EXPECT_EQ(count1, count2); // Должно быть одинаково
@@ -96,8 +96,8 @@ TEST_F(CreatorTest, NullPointerHandling) {
     auto tree = std::make_unique<RETerminal>(grammar.get(), termId);
     
     // Не должно падать с nullptr
-    Creator::createDrawObjects(nullptr, tree.get(), grammar.get());
-    Creator::createDrawObjects(list.get(), nullptr, grammar.get());
+    Creator::createDrawObjects(nullptr, tree.get());
+    Creator::createDrawObjects(list.get(), nullptr);
     
     EXPECT_EQ(list->count(), 0); // Список должен остаться пустым
 }

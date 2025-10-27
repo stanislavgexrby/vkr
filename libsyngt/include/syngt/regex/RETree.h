@@ -4,10 +4,13 @@
 #include <string>
 
 namespace syngt {
+    class SemanticIDList;  // Forward declaration
+}
 
+namespace syngt {
 namespace graphics {
-    class DrawObject;
     class DrawObjectList;
+    class DrawObject;
 }
 
 /**
@@ -80,6 +83,15 @@ public:
     
     int drawObj() const { return m_drawObj; }
     void setDrawObj(int index) { m_drawObj = index; }
+
+    virtual syngt::graphics::DrawObject* drawObjectsToRight(
+        syngt::graphics::DrawObjectList* list,
+        syngt::SemanticIDList*& semantics,
+        syngt::graphics::DrawObject* fromDO,
+        int ward,
+        int& height
+    ) const;
+
 };
 
 }

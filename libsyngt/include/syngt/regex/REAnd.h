@@ -40,6 +40,15 @@ public:
                                         std::unique_ptr<RETree> second) {
         return std::make_unique<REAnd>(std::move(first), std::move(second));
     }
+
+    syngt::graphics::DrawObject* drawObjectsToRight(
+        syngt::graphics::DrawObjectList* list,
+        syngt::SemanticIDList*& semantics,
+        syngt::graphics::DrawObject* fromDO,
+        int ward,
+        int& height
+    ) const override;
+
 };
 
 }

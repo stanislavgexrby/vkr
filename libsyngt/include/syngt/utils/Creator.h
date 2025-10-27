@@ -38,8 +38,7 @@ constexpr int VerticalSpace = 30 + 7;  // NS_Radius + 7
  */
 void createDrawObjects(
     graphics::DrawObjectList* list,
-    const RETree* tree,
-    Grammar* grammar
+    const RETree* tree
 );
 
 } // namespace Creator
