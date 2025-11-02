@@ -57,7 +57,7 @@ DrawObject* RETree::drawObjectsToRight(
     return fromDO;
 }
 
-// RETerminal::drawObjectsToRight
+// В RETerminal::drawObjectsToRight
 DrawObject* RETerminal::drawObjectsToRight(
     DrawObjectList* list,
     SemanticIDList*& semantics,
@@ -69,6 +69,11 @@ DrawObject* RETerminal::drawObjectsToRight(
         height = NS_Radius;
     } else {
         height = 0;
+    }
+    
+    if (m_id == 0) {
+        semantics = nullptr;
+        return fromDO;
     }
     
     auto terminal = std::make_unique<DrawObjectTerminal>(m_grammar, m_id);
@@ -240,7 +245,6 @@ DrawObject* REOr::drawObjectsToRight(
     return finalPoint;
 }
 
-// REIteration::drawObjectsToRight
 DrawObject* REIteration::drawObjectsToRight(
     DrawObjectList* list,
     SemanticIDList*& semantics,
@@ -248,8 +252,9 @@ DrawObject* REIteration::drawObjectsToRight(
     int ward,
     int& height
 ) const {
-    // Создаем левую точку разветвления
-    int curWard = (ward == cwBACKWARD && fromDO->needSpike()) ? cwBACKWARD : cwNONE;
+    // ===== Левая точка с отступом =====
+    int curWard = (ward == cwBACKWARD && fromDO->needSpike()) ?
+        cwBACKWARD : cwNONE;
     
     auto leftPoint = std::make_unique<DrawObjectPoint>();
     if (semantics == nullptr) {
@@ -264,50 +269,112 @@ DrawObject* REIteration::drawObjectsToRight(
     leftPoint->setPlaceToRight();
     
     DrawObjectPoint* leftPtr = leftPoint.get();
+    const int leftX = leftPtr->x();
+    const int leftY = leftPtr->y();
     list->add(std::move(leftPoint));
     
-    // Первый операнд (повторяемая часть A) идет вправо
+    // ===== Создаем промежуточную точку ПОСЛЕ leftPoint для первого операнда =====
+    // Это создает отступ между leftPoint и первым элементом
+    auto startPoint = std::make_unique<DrawObjectPoint>();
+    startPoint->setPosition(leftX + MinArrowLength, leftY);
+    startPoint->setInArrow(std::make_unique<Arrow>(cwNONE, leftPtr));
+    
+    DrawObjectPoint* startPtr = startPoint.get();
+    list->add(std::move(startPoint));
+    
+    // ===== Первый операнд от startPoint =====
     int height1 = 0;
     SemanticIDList* sem1 = nullptr;
     DrawObject* firstLast = m_first->drawObjectsToRight(
-        list, sem1, leftPtr, ward, height1
+        list, sem1, startPtr, ward, height1
     );
     
-    // Создаем правую точку после первого операнда
-    int curWard1 = (ward == cwBACKWARD && firstLast->needSpike()) ? cwBACKWARD : cwNONE;
-    auto rightPoint = std::make_unique<DrawObjectPoint>();
+    // ===== Y для нижней ветки =====
+    int downY = leftY + VerticalSpace + std::max(height1, NS_Radius);
+    
+    // ===== Точка вниз =====
+    auto downPoint = std::make_unique<DrawObjectPoint>();
+    downPoint->setInArrow(std::make_unique<Arrow>(cwNONE, leftPtr));
+    downPoint->setPosition(leftX, downY);
+    
+    DrawObjectPoint* downPtr = downPoint.get();
+    list->add(std::move(downPoint));
+    
+    // ===== Промежуточная точка для второго операнда =====
+    auto startPoint2 = std::make_unique<DrawObjectPoint>();
+    startPoint2->setPosition(leftX + MinArrowLength, downY);
+    startPoint2->setInArrow(std::make_unique<Arrow>(cwNONE, downPtr));
+    
+    DrawObjectPoint* startPtr2 = startPoint2.get();
+    list->add(std::move(startPoint2));
+    
+    // ===== Второй операнд =====
+    int oppositeWard = -ward;
+    int height2 = 0;
+    SemanticIDList* sem2 = nullptr;
+    DrawObject* secondLast = m_second->drawObjectsToRight(
+        list, sem2, startPtr2, oppositeWard, height2
+    );
+    
+    // ===== Находим максимальный X =====
+    int maxX = (firstLast->endX() > secondLast->endX()) ? 
+               firstLast->endX() : secondLast->endX();
+    
+    // ===== Выравниваем =====
+    if (firstLast->endX() < maxX) {
+        int shift = maxX - firstLast->endX();
+        firstLast->move(shift, 0);
+    }
+    if (secondLast->endX() < maxX) {
+        int shift = maxX - secondLast->endX();
+        secondLast->move(shift, 0);
+    }
+    
+    // ===== Промежуточная точка перед rightPoint =====
+    // Создаем точку на maxX для схождения веток
+    auto preRightPoint = std::make_unique<DrawObjectPoint>();
+    preRightPoint->setPosition(maxX + MinArrowLength, leftY);
+    
+    // Первая стрелка от верхней ветки
+    int curWard1 = (ward == cwBACKWARD && firstLast->needSpike()) ? 
+        cwBACKWARD : cwNONE;
     if (sem1 == nullptr) {
-        rightPoint->setInArrow(std::make_unique<Arrow>(curWard1, firstLast));
+        preRightPoint->setInArrow(std::make_unique<Arrow>(curWard1, firstLast));
     } else {
         auto arrow = std::make_unique<SemanticArrow>(
             curWard1, firstLast, std::unique_ptr<SemanticIDList>(sem1)
         );
-        rightPoint->setInArrow(std::move(arrow));
+        preRightPoint->setInArrow(std::move(arrow));
     }
-    rightPoint->setPlaceToRight();
+    
+    // Вторая стрелка от нижней ветки
+    if (sem2 == nullptr) {
+        preRightPoint->setSecondInArrow(std::make_unique<Arrow>(cwNONE, secondLast));
+    } else {
+        auto arrow = std::make_unique<SemanticArrow>(
+            cwNONE, secondLast, std::unique_ptr<SemanticIDList>(sem2)
+        );
+        preRightPoint->setSecondInArrow(std::move(arrow));
+    }
+    
+    DrawObjectPoint* preRightPtr = preRightPoint.get();
+    list->add(std::move(preRightPoint));
+    
+    // ===== Правая точка с отступом =====
+    auto rightPoint = std::make_unique<DrawObjectPoint>();
+    rightPoint->setPosition(maxX + MinArrowLength * 2, leftY);
+    rightPoint->setInArrow(std::make_unique<Arrow>(cwNONE, preRightPtr));
     
     DrawObjectPoint* rightPtr = rightPoint.get();
     list->add(std::move(rightPoint));
     
-    // Второй операнд (B) идет от правой точки вправо, затем назад к левой точке
-    int height2 = 0;
-    SemanticIDList* sem2 = nullptr;
-    DrawObject* secondLast = m_second->drawObjectsToRight(
-        list, sem2, rightPtr, cwBACKWARD, height2
-    );
-    
-    // Создаем обратную стрелку от конца второго операнда к левой точке (петля!)
-    auto backArrow = std::make_unique<Arrow>(cwBACKWARD, secondLast);
-    leftPtr->setSecondInArrow(std::move(backArrow));
-    
-    // Вычисляем высоту
+    // ===== Высота =====
     int cy = height1 + VerticalSpace;
     if (height2 > 0) {
         cy += height2;
     } else {
         cy += NS_Radius;
     }
-    
     height = (height1 > cy) ? height1 : cy;
     
     return rightPtr;
