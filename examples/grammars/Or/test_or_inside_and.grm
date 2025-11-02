@@ -1,0 +1,5 @@
+{ OR внутри последовательности - проверяем a,(b;c),d }
+S : stmt.
+stmt : 'begin' , action , 'end'.
+action : 'read' ; 'write' ; 'compute'.
+EOGram!

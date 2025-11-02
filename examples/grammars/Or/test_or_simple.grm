@@ -1,0 +1,4 @@
+{ Простое ветвление - 3 альтернативы }
+S : type.
+type : 'int' ; 'float' ; 'string'.
+EOGram!

@@ -1,0 +1,4 @@
+{ Последовательности внутри OR - проверяем (a,b);(c,d) }
+S : decl.
+decl : 'int' , ID ; 'float' , ID ; 'string' , ID.
+EOGram!

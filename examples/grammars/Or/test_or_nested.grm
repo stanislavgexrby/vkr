@@ -1,0 +1,6 @@
+{ Вложенные OR - проверяем (a;b);(c;d) }
+S : expr.
+expr : simple ; complex.
+simple : 'a' ; 'b'.
+complex : 'c' ; 'd'.
+EOGram!

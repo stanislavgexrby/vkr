@@ -129,8 +129,9 @@ DrawObject* REOr::drawObjectsToRight(
     std::vector<const RETree*> alternatives;
     flatten(this, alternatives);
 
-    // ===== Common left point =====
-    int curWard = ((ward == cwBACKWARD) && fromDO->needSpike()) ? cwBACKWARD : cwNONE;
+    // ===== Левая точка разветвления =====
+    int curWard = ((ward == cwBACKWARD) && fromDO->needSpike()) ?
+        cwBACKWARD : cwNONE;
 
     auto leftPoint = std::make_unique<DrawObjectPoint>();
     if (semantics == nullptr) {
@@ -149,20 +150,21 @@ DrawObject* REOr::drawObjectsToRight(
     const int baseY = leftPtr->y();
     list->add(std::move(leftPoint));
 
-    // ===== Draw each alternative branch =====
+    // ===== Рисуем каждую альтернативную ветвь =====
     std::vector<DrawObject*> branchEnds;
-    int maxEndX = baseX;
-    int currentY = baseY;
     const int verticalSpacing = 60;
 
     for (size_t i = 0; i < alternatives.size(); ++i) {
         DrawObjectPoint* branchStart = nullptr;
+        int branchY = baseY + static_cast<int>(i) * verticalSpacing;
 
         if (i == 0) {
+            // Первая альтернатива идет напрямую от левой точки
             branchStart = leftPtr;
         } else {
+            // Остальные альтернативы - создаем новые точки на своем уровне Y
             auto branchJoin = std::make_unique<DrawObjectPoint>();
-            branchJoin->setPosition(baseX, currentY);
+            branchJoin->setPosition(baseX, branchY);
             branchJoin->setInArrow(std::make_unique<Arrow>(cwNONE, leftPtr));
             branchStart = branchJoin.get();
             list->add(std::move(branchJoin));
@@ -171,33 +173,71 @@ DrawObject* REOr::drawObjectsToRight(
         int branchHeight = 0;
         SemanticIDList* sem = nullptr;
 
+        // Рисуем содержимое ветви
         DrawObject* branchEnd = alternatives[i]->drawObjectsToRight(
             list, sem, branchStart, ward, branchHeight
         );
 
         branchEnds.push_back(branchEnd);
+    }
 
+    // ===== Находим максимальный X среди всех ветвей =====
+    int maxEndX = baseX;
+    for (auto* branchEnd : branchEnds) {
         if (branchEnd->endX() > maxEndX)
             maxEndX = branchEnd->endX();
-
-        currentY += std::max(branchHeight, NS_Radius) + verticalSpacing;
     }
 
-    // ===== Create single right junction point =====
-    auto rightPoint = std::make_unique<DrawObjectPoint>();
-    rightPoint->setPosition(maxEndX + 40, baseY);
-    DrawObjectPoint* rightPtr = rightPoint.get();
-    list->add(std::move(rightPoint));
-
-    // ===== Connect all branches to the single right point =====
+    // ===== Выравниваем все ветви по максимальному X =====
     for (auto* branchEnd : branchEnds) {
-        // todo 
-        // rightPtr->addInArrow(std::make_unique<Arrow>(cwNONE, branchEnd));
+        if (branchEnd->endX() < maxEndX) {
+            int shift = maxEndX - branchEnd->endX();
+            branchEnd->move(shift, 0);
+        }
     }
 
-    // ===== Height and return =====
-    height = (currentY - baseY) - verticalSpacing; // subtract last spacing
-    return rightPtr;
+    // ===== Создаем правую точку соединения =====
+    DrawObject* finalPoint = nullptr;
+    
+    if (branchEnds.size() == 1) {
+        // Одна альтернатива
+        finalPoint = branchEnds[0];
+        height = NS_Radius;
+    } else {
+        // 2+ альтернативы - создаем каскад точек снизу вверх
+        // Начинаем с последней ветви и идем к первой
+        DrawObjectPoint* currentPoint = nullptr;
+        
+        // Создаем точки соединения снизу вверх
+        for (int i = static_cast<int>(branchEnds.size()) - 1; i >= 0; --i) {
+            if (i == static_cast<int>(branchEnds.size()) - 1) {
+                // Самая нижняя ветвь - просто запоминаем её конец
+                currentPoint = dynamic_cast<DrawObjectPoint*>(branchEnds[i]);
+                if (!currentPoint) {
+                    // Если это не точка, создаем промежуточную точку
+                    auto tempPoint = std::make_unique<DrawObjectPoint>();
+                    tempPoint->setPosition(maxEndX + SpaceLength, branchEnds[i]->y());
+                    tempPoint->setInArrow(std::make_unique<Arrow>(cwNONE, branchEnds[i]));
+                    currentPoint = tempPoint.get();
+                    list->add(std::move(tempPoint));
+                }
+            } else {
+                // Создаем точку соединения на уровне текущей ветви
+                auto joinPoint = std::make_unique<DrawObjectPoint>();
+                joinPoint->setPosition(maxEndX + SpaceLength, branchEnds[i]->y());
+                joinPoint->setInArrow(std::make_unique<Arrow>(cwNONE, branchEnds[i]));
+                joinPoint->setSecondInArrow(std::make_unique<Arrow>(cwNONE, currentPoint));
+                
+                currentPoint = joinPoint.get();
+                list->add(std::move(joinPoint));
+            }
+        }
+        
+        finalPoint = currentPoint;
+        height = static_cast<int>(alternatives.size() - 1) * verticalSpacing + NS_Radius;
+    }
+
+    return finalPoint;
 }
 
 // REIteration::drawObjectsToRight

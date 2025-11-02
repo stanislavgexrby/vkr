@@ -1,0 +1,5 @@
+{ Глубокая вложенность - OR внутри AND внутри OR }
+S : expr.
+expr : term , '+' , term ; term , '-' , term ; term.
+term : NUM ; ID ; '(' , expr , ')'.
+EOGram!
