@@ -39,9 +39,11 @@ NTListItem* RENonTerminal::getListItem() const {
         return nullptr;
     }
     
-    // TODO: Реализовать получение NTListItem из Grammar
-    // Пока заглушка - будет добавлено когда реализуем хранение NTListItem в Grammar
-    return nullptr;
+    // Получаем имя нетерминала по ID
+    std::string ntName = m_grammar->nonTerminals()->getString(m_id);
+    
+    // Получаем NTListItem из грамматики
+    return m_grammar->getNTItem(ntName);
 }
 
 std::unique_ptr<RETree> RENonTerminal::copy() const {

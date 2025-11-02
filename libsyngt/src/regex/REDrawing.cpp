@@ -105,7 +105,7 @@ DrawObject* REAnd::drawObjectsToRight(
     return result;
 }
 
-// REOr::drawObjectsToRight
+// REOr::drawObjectsToRight  
 DrawObject* REOr::drawObjectsToRight(
     DrawObjectList* list,
     SemanticIDList*& semantics,
@@ -113,7 +113,7 @@ DrawObject* REOr::drawObjectsToRight(
     int ward,
     int& height
 ) const {
-    // Создаем точку для разветвления
+    // Создаем левую точку разветвления
     int curWard = (ward == cwBACKWARD && fromDO->needSpike()) ? cwBACKWARD : cwNONE;
     
     auto leftPoint = std::make_unique<DrawObjectPoint>();
@@ -138,29 +138,26 @@ DrawObject* REOr::drawObjectsToRight(
         list, sem1, leftPtr, ward, height1
     );
     
-    // Создаем точку после первой ветки
+    // Создаем правую точку схождения
     int curWard1 = (ward == cwBACKWARD && firstLast->needSpike()) ? cwBACKWARD : cwNONE;
-    auto rightPoint1 = std::make_unique<DrawObjectPoint>();
+    auto rightPoint = std::make_unique<DrawObjectPoint>();
     if (sem1 == nullptr) {
-        rightPoint1->setInArrow(std::make_unique<Arrow>(curWard1, firstLast));
+        rightPoint->setInArrow(std::make_unique<Arrow>(curWard1, firstLast));
     } else {
         auto arrow = std::make_unique<SemanticArrow>(
             curWard1, firstLast, std::unique_ptr<SemanticIDList>(sem1)
         );
-        sem1 = nullptr;
-        rightPoint1->setInArrow(std::move(arrow));
+        rightPoint->setInArrow(std::move(arrow));
     }
-    rightPoint1->setPlaceToRight();
+    rightPoint->setPlaceToRight();
     
-    DrawObjectPoint* rightPtr1 = rightPoint1.get();
-    list->add(std::move(rightPoint1));
+    DrawObjectPoint* rightPtr = rightPoint.get();
+    list->add(std::move(rightPoint));
     
-    // Вторая ветка идет вниз через ту же левую точку
-    int height2 = 0;
-    SemanticIDList* sem2 = nullptr;
-    
-    // Создаем точку для спуска вниз
+    // Вторая ветка идет вниз от левой точки
     int cy = height1 + VerticalSpace;
+    
+    // Создаем точку для второй ветки (вниз от левой точки)
     auto downPoint = std::make_unique<DrawObjectPoint>();
     downPoint->setInArrow(std::make_unique<Arrow>(cwNONE, leftPtr));
     downPoint->setPosition(leftPtr->x(), leftPtr->y() + cy);
@@ -168,22 +165,30 @@ DrawObject* REOr::drawObjectsToRight(
     DrawObjectPoint* downPtr = downPoint.get();
     list->add(std::move(downPoint));
     
-    // Вторая ветка от точки вниз
+    // Вторая ветка от точки вниз идет вправо
+    int height2 = 0;
+    SemanticIDList* sem2 = nullptr;
     DrawObject* secondLast = m_second->drawObjectsToRight(
         list, sem2, downPtr, ward, height2
     );
     
-    // Подключаем вторую точку входа к правой точке
+    // Подключаем конец второй ветки к правой точке (вторая входящая стрелка)
     int curWard2 = (ward == cwFORWARD) ? cwFORWARD : cwNONE;
     if (sem2 == nullptr) {
-        rightPtr1->setSecondInArrow(std::make_unique<Arrow>(curWard2, secondLast));
+        rightPtr->setSecondInArrow(std::make_unique<Arrow>(curWard2, secondLast));
     } else {
         auto arrow = std::make_unique<SemanticArrow>(
             curWard2, secondLast, std::unique_ptr<SemanticIDList>(sem2)
         );
-        rightPtr1->setSecondInArrow(std::move(arrow));
+        rightPtr->setSecondInArrow(std::move(arrow));
     }
     
+    // Выравниваем X координаты
+    if (secondLast->endX() > rightPtr->x()) {
+        rightPtr->setXCoord(secondLast->endX());
+    }
+    
+    // Вычисляем высоту
     if (height2 > 0) {
         cy += height2;
     } else {
@@ -192,7 +197,7 @@ DrawObject* REOr::drawObjectsToRight(
     
     height = (height1 > cy) ? height1 : cy;
     
-    return rightPtr1;
+    return rightPtr;
 }
 
 // REIteration::drawObjectsToRight
@@ -203,7 +208,7 @@ DrawObject* REIteration::drawObjectsToRight(
     int ward,
     int& height
 ) const {
-    // Создаем точку для разветвления
+    // Создаем левую точку разветвления
     int curWard = (ward == cwBACKWARD && fromDO->needSpike()) ? cwBACKWARD : cwNONE;
     
     auto leftPoint = std::make_unique<DrawObjectPoint>();
@@ -221,14 +226,14 @@ DrawObject* REIteration::drawObjectsToRight(
     DrawObjectPoint* leftPtr = leftPoint.get();
     list->add(std::move(leftPoint));
     
-    // Первый операнд (повторяемая часть)
+    // Первый операнд (повторяемая часть A) идет вправо
     int height1 = 0;
     SemanticIDList* sem1 = nullptr;
     DrawObject* firstLast = m_first->drawObjectsToRight(
         list, sem1, leftPtr, ward, height1
     );
     
-    // Создаем точку после первого операнда
+    // Создаем правую точку после первого операнда
     int curWard1 = (ward == cwBACKWARD && firstLast->needSpike()) ? cwBACKWARD : cwNONE;
     auto rightPoint = std::make_unique<DrawObjectPoint>();
     if (sem1 == nullptr) {
@@ -237,7 +242,6 @@ DrawObject* REIteration::drawObjectsToRight(
         auto arrow = std::make_unique<SemanticArrow>(
             curWard1, firstLast, std::unique_ptr<SemanticIDList>(sem1)
         );
-        sem1 = nullptr;
         rightPoint->setInArrow(std::move(arrow));
     }
     rightPoint->setPlaceToRight();
@@ -245,17 +249,18 @@ DrawObject* REIteration::drawObjectsToRight(
     DrawObjectPoint* rightPtr = rightPoint.get();
     list->add(std::move(rightPoint));
     
-    // Второй операнд (итерируемая часть) - идет вниз и обратно
+    // Второй операнд (B) идет от правой точки вправо, затем назад к левой точке
     int height2 = 0;
     SemanticIDList* sem2 = nullptr;
     DrawObject* secondLast = m_second->drawObjectsToRight(
         list, sem2, rightPtr, cwBACKWARD, height2
     );
     
-    // Подключаем обратную связь к левой точке
-    auto inArrow2 = std::make_unique<Arrow>(cwBACKWARD, secondLast);
-    leftPtr->setSecondInArrow(std::move(inArrow2));
+    // Создаем обратную стрелку от конца второго операнда к левой точке (петля!)
+    auto backArrow = std::make_unique<Arrow>(cwBACKWARD, secondLast);
+    leftPtr->setSecondInArrow(std::move(backArrow));
     
+    // Вычисляем высоту
     int cy = height1 + VerticalSpace;
     if (height2 > 0) {
         cy += height2;
@@ -266,6 +271,35 @@ DrawObject* REIteration::drawObjectsToRight(
     height = (height1 > cy) ? height1 : cy;
     
     return rightPtr;
+}
+
+// RENonTerminal::drawObjectsToRight
+DrawObject* RENonTerminal::drawObjectsToRight(
+    DrawObjectList* list,
+    SemanticIDList*& semantics,
+    DrawObject* fromDO,
+    int ward,
+    int& height
+) const {
+    // Если нетерминал "открыт", рекурсивно обрабатываем его корень
+    if (m_isOpen) {
+        RETree* root = getRoot();
+        if (root) {
+            return root->drawObjectsToRight(list, semantics, fromDO, ward, height);
+        }
+    }
+    
+    // Иначе создаем графический объект нетерминала
+    height = NS_Radius;
+    
+    auto nonTerminal = std::make_unique<DrawObjectNonTerminal>(m_grammar, m_id);
+    nonTerminal->setInArrow(makeArrowForwardAlways(fromDO, ward, semantics));
+    nonTerminal->setPlaceToRight();
+    
+    DrawObject* result = nonTerminal.get();
+    list->add(std::move(nonTerminal));
+    
+    return result;
 }
 
 } // namespace syngt

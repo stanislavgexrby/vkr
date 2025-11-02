@@ -58,6 +58,15 @@ public:
     int getID() const { return m_id; }
     
     Grammar* grammar() const { return m_grammar; }
+
+    syngt::graphics::DrawObject* drawObjectsToRight(
+        syngt::graphics::DrawObjectList* list,
+        syngt::SemanticIDList*& semantics,
+        syngt::graphics::DrawObject* fromDO,
+        int ward,
+        int& height
+    ) const override;
+
 };
 
 }

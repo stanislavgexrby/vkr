@@ -216,6 +216,7 @@ void RenderDiagram(ImDrawList* drawList, const ImVec2& offset) {
     const float scale = 1.0f;
     const ImU32 lineColor = IM_COL32(200, 200, 200, 255);
     const ImU32 textColor = IM_COL32(255, 255, 255, 255);
+    const ImU32 pointColor = IM_COL32(255, 255, 255, 255);
     
     // Рисуем все объекты
     for (int i = 0; i < drawObjects->count(); ++i) {
@@ -273,8 +274,13 @@ void RenderDiagram(ImDrawList* drawList, const ImVec2& offset) {
                 lineColor
             );
         }
+        else if (type == syngt::graphics::ctDrawObjectPoint || 
+                 type == syngt::graphics::ctDrawObjectExtendedPoint) {
+            // Точка - маленький кружок
+            drawList->AddCircleFilled(ImVec2(x, y), 3.0f, pointColor);
+        }
         
-        // Рисуем входящую стрелку
+        // Рисуем первую входящую стрелку
         syngt::graphics::Arrow* arrow = obj->inArrow();
         if (arrow && arrow->getFromDO()) {
             syngt::graphics::DrawObject* from = dynamic_cast<syngt::graphics::DrawObject*>(arrow->getFromDO());
@@ -284,6 +290,24 @@ void RenderDiagram(ImDrawList* drawList, const ImVec2& offset) {
                 float x2 = x;
                 float y2 = y;
                 drawList->AddLine(ImVec2(x1, y1), ImVec2(x2, y2), lineColor, 2.0f);
+            }
+        }
+        
+        // Рисуем вторую входящую стрелку для DrawObjectPoint (критично для OR!)
+        if (type == syngt::graphics::ctDrawObjectPoint) {
+            auto point = dynamic_cast<syngt::graphics::DrawObjectPoint*>(obj);
+            if (point && point->secondInArrow()) {
+                syngt::graphics::Arrow* arrow2 = point->secondInArrow();
+                if (arrow2->getFromDO()) {
+                    syngt::graphics::DrawObject* from = dynamic_cast<syngt::graphics::DrawObject*>(arrow2->getFromDO());
+                    if (from) {
+                        float x1 = offset.x + from->endX() * scale;
+                        float y1 = offset.y + from->y() * scale;
+                        float x2 = x;
+                        float y2 = y;
+                        drawList->AddLine(ImVec2(x1, y1), ImVec2(x2, y2), lineColor, 2.0f);
+                    }
+                }
             }
         }
     }
