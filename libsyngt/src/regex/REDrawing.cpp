@@ -12,6 +12,8 @@
 #include <syngt/utils/Semantic.h>
 #include <syngt/core/Grammar.h>
 
+#include <functional>
+
 namespace syngt {
 
 using namespace graphics;
@@ -105,7 +107,6 @@ DrawObject* REAnd::drawObjectsToRight(
     return result;
 }
 
-// REOr::drawObjectsToRight  
 DrawObject* REOr::drawObjectsToRight(
     DrawObjectList* list,
     SemanticIDList*& semantics,
@@ -113,9 +114,24 @@ DrawObject* REOr::drawObjectsToRight(
     int ward,
     int& height
 ) const {
-    // Создаем левую точку разветвления
-    int curWard = (ward == cwBACKWARD && fromDO->needSpike()) ? cwBACKWARD : cwNONE;
-    
+    // ===== Flatten nested ORs =====
+    std::function<void(const RETree*, std::vector<const RETree*>&)> flatten;
+    flatten = [&](const RETree* node, std::vector<const RETree*>& out) {
+        if (!node) return;
+        if (auto orNode = dynamic_cast<const REOr*>(node)) {
+            flatten(orNode->m_first.get(), out);
+            flatten(orNode->m_second.get(), out);
+        } else {
+            out.push_back(node);
+        }
+    };
+
+    std::vector<const RETree*> alternatives;
+    flatten(this, alternatives);
+
+    // ===== Common left point =====
+    int curWard = ((ward == cwBACKWARD) && fromDO->needSpike()) ? cwBACKWARD : cwNONE;
+
     auto leftPoint = std::make_unique<DrawObjectPoint>();
     if (semantics == nullptr) {
         leftPoint->setInArrow(std::make_unique<Arrow>(curWard, fromDO));
@@ -127,76 +143,60 @@ DrawObject* REOr::drawObjectsToRight(
         leftPoint->setInArrow(std::move(arrow));
     }
     leftPoint->setPlaceToRight();
-    
+
     DrawObjectPoint* leftPtr = leftPoint.get();
+    const int baseX = leftPtr->x();
+    const int baseY = leftPtr->y();
     list->add(std::move(leftPoint));
-    
-    // Первая ветка идет вправо
-    int height1 = 0;
-    SemanticIDList* sem1 = nullptr;
-    DrawObject* firstLast = m_first->drawObjectsToRight(
-        list, sem1, leftPtr, ward, height1
-    );
-    
-    // Создаем правую точку схождения
-    int curWard1 = (ward == cwBACKWARD && firstLast->needSpike()) ? cwBACKWARD : cwNONE;
-    auto rightPoint = std::make_unique<DrawObjectPoint>();
-    if (sem1 == nullptr) {
-        rightPoint->setInArrow(std::make_unique<Arrow>(curWard1, firstLast));
-    } else {
-        auto arrow = std::make_unique<SemanticArrow>(
-            curWard1, firstLast, std::unique_ptr<SemanticIDList>(sem1)
+
+    // ===== Draw each alternative branch =====
+    std::vector<DrawObject*> branchEnds;
+    int maxEndX = baseX;
+    int currentY = baseY;
+    const int verticalSpacing = 60;
+
+    for (size_t i = 0; i < alternatives.size(); ++i) {
+        DrawObjectPoint* branchStart = nullptr;
+
+        if (i == 0) {
+            branchStart = leftPtr;
+        } else {
+            auto branchJoin = std::make_unique<DrawObjectPoint>();
+            branchJoin->setPosition(baseX, currentY);
+            branchJoin->setInArrow(std::make_unique<Arrow>(cwNONE, leftPtr));
+            branchStart = branchJoin.get();
+            list->add(std::move(branchJoin));
+        }
+
+        int branchHeight = 0;
+        SemanticIDList* sem = nullptr;
+
+        DrawObject* branchEnd = alternatives[i]->drawObjectsToRight(
+            list, sem, branchStart, ward, branchHeight
         );
-        rightPoint->setInArrow(std::move(arrow));
+
+        branchEnds.push_back(branchEnd);
+
+        if (branchEnd->endX() > maxEndX)
+            maxEndX = branchEnd->endX();
+
+        currentY += std::max(branchHeight, NS_Radius) + verticalSpacing;
     }
-    rightPoint->setPlaceToRight();
-    
+
+    // ===== Create single right junction point =====
+    auto rightPoint = std::make_unique<DrawObjectPoint>();
+    rightPoint->setPosition(maxEndX + 40, baseY);
     DrawObjectPoint* rightPtr = rightPoint.get();
     list->add(std::move(rightPoint));
-    
-    // Вторая ветка идет вниз от левой точки
-    int cy = height1 + VerticalSpace;
-    
-    // Создаем точку для второй ветки (вниз от левой точки)
-    auto downPoint = std::make_unique<DrawObjectPoint>();
-    downPoint->setInArrow(std::make_unique<Arrow>(cwNONE, leftPtr));
-    downPoint->setPosition(leftPtr->x(), leftPtr->y() + cy);
-    
-    DrawObjectPoint* downPtr = downPoint.get();
-    list->add(std::move(downPoint));
-    
-    // Вторая ветка от точки вниз идет вправо
-    int height2 = 0;
-    SemanticIDList* sem2 = nullptr;
-    DrawObject* secondLast = m_second->drawObjectsToRight(
-        list, sem2, downPtr, ward, height2
-    );
-    
-    // Подключаем конец второй ветки к правой точке (вторая входящая стрелка)
-    int curWard2 = (ward == cwFORWARD) ? cwFORWARD : cwNONE;
-    if (sem2 == nullptr) {
-        rightPtr->setSecondInArrow(std::make_unique<Arrow>(curWard2, secondLast));
-    } else {
-        auto arrow = std::make_unique<SemanticArrow>(
-            curWard2, secondLast, std::unique_ptr<SemanticIDList>(sem2)
-        );
-        rightPtr->setSecondInArrow(std::move(arrow));
+
+    // ===== Connect all branches to the single right point =====
+    for (auto* branchEnd : branchEnds) {
+        // todo 
+        // rightPtr->addInArrow(std::make_unique<Arrow>(cwNONE, branchEnd));
     }
-    
-    // Выравниваем X координаты
-    if (secondLast->endX() > rightPtr->x()) {
-        rightPtr->setXCoord(secondLast->endX());
-    }
-    
-    // Вычисляем высоту
-    if (height2 > 0) {
-        cy += height2;
-    } else {
-        cy += NS_Radius;
-    }
-    
-    height = (height1 > cy) ? height1 : cy;
-    
+
+    // ===== Height and return =====
+    height = (currentY - baseY) - verticalSpacing; // subtract last spacing
     return rightPtr;
 }
 
