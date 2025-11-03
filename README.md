@@ -11,48 +11,38 @@
 ```bash
 pacman -S mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-ninja
 ```
-**Linux:**
-```bach
-sudo apt install build-essential cmake ninja-build
-```
+
 # Clone repository
 ```bash
-git clone <repository-url>
-cd syngt-cpp
+git clone https://github.com/stanislavgexrby/vkr.git
+cd vkr
 ```
 
-# Create build directory
+# Install ImGUI
 ```bash
-mkdir build && cd build
+./setup.bat
 ```
 
-# Configure
+# Build and run
 ```bash
-cmake .. -G Ninja
-```
-
-# Build
-```bash
-ninja
+./run.bat
 ```
 
 # Usage
-```bash
-# From build directory
-./bin/syngt_cli path/to/grammar.grm
-```
+In GUI press help
 
-# Run tests
-```bash
-# From build directory
-ctest --output-on-failure
+---
 
-# Or run specific test
-./tests/test_Grammar
-./tests/test_Parser
-```
-# Run all tests
+### Build with CMake
+
 ```bash
+mkdir build
 cd build
-ctest
+cmake ..
+cmake --build . --config Release
+
+# Запустить тесты
+ctest -C Release --output-on-failure
 ```
+
+---
