@@ -158,6 +158,7 @@ DrawObject* REOr::drawObjectsToRight(
     // ===== Рисуем каждую альтернативную ветвь =====
     std::vector<DrawObject*> branchEnds;
     const int verticalSpacing = 60;
+    int maxBranchHeight = 0;
 
     for (size_t i = 0; i < alternatives.size(); ++i) {
         DrawObjectPoint* branchStart = nullptr;
@@ -183,6 +184,10 @@ DrawObject* REOr::drawObjectsToRight(
             list, sem, branchStart, ward, branchHeight
         );
 
+        if (branchHeight > maxBranchHeight) {
+            maxBranchHeight = branchHeight;
+        }
+
         branchEnds.push_back(branchEnd);
     }
 
@@ -192,55 +197,39 @@ DrawObject* REOr::drawObjectsToRight(
         if (branchEnd->endX() > maxEndX)
             maxEndX = branchEnd->endX();
     }
+    maxEndX += MinArrowLength;
 
-    // ===== Выравниваем все ветви по максимальному X =====
-    for (auto* branchEnd : branchEnds) {
-        if (branchEnd->endX() < maxEndX) {
-            int shift = maxEndX - branchEnd->endX();
-            branchEnd->move(shift, 0);
-        }
-    }
-
-    // ===== Создаем правую точку соединения =====
-    DrawObject* finalPoint = nullptr;
+    // ===== Создаем правую точку соединения на maxEndX =====
+    // Создаем каскад точек снизу вверх для схождения веток
+    DrawObjectPoint* currentPoint = nullptr;
     
-    if (branchEnds.size() == 1) {
-        // Одна альтернатива
-        finalPoint = branchEnds[0];
-        height = NS_Radius;
-    } else {
-        // 2+ альтернативы - создаем каскад точек снизу вверх
-        // Начинаем с последней ветви и идем к первой
-        DrawObjectPoint* currentPoint = nullptr;
+    for (int i = static_cast<int>(branchEnds.size()) - 1; i >= 0; --i) {
+        int branchY = baseY + i * verticalSpacing;
         
-        // Создаем точки соединения снизу вверх
-        for (int i = static_cast<int>(branchEnds.size()) - 1; i >= 0; --i) {
-            if (i == static_cast<int>(branchEnds.size()) - 1) {
-                // Самая нижняя ветвь - просто запоминаем её конец
-                currentPoint = dynamic_cast<DrawObjectPoint*>(branchEnds[i]);
-                if (!currentPoint) {
-                    // Если это не точка, создаем промежуточную точку
-                    auto tempPoint = std::make_unique<DrawObjectPoint>();
-                    tempPoint->setPosition(maxEndX + SpaceLength, branchEnds[i]->y());
-                    tempPoint->setInArrow(std::make_unique<Arrow>(cwNONE, branchEnds[i]));
-                    currentPoint = tempPoint.get();
-                    list->add(std::move(tempPoint));
-                }
-            } else {
-                // Создаем точку соединения на уровне текущей ветви
-                auto joinPoint = std::make_unique<DrawObjectPoint>();
-                joinPoint->setPosition(maxEndX + SpaceLength, branchEnds[i]->y());
-                joinPoint->setInArrow(std::make_unique<Arrow>(cwNONE, branchEnds[i]));
-                joinPoint->setSecondInArrow(std::make_unique<Arrow>(cwNONE, currentPoint));
-                
-                currentPoint = joinPoint.get();
-                list->add(std::move(joinPoint));
-            }
+        if (i == static_cast<int>(branchEnds.size()) - 1) {
+            // Самая нижняя ветвь
+            auto joinPoint = std::make_unique<DrawObjectPoint>();
+            joinPoint->setPosition(maxEndX, branchY);
+            joinPoint->setInArrow(std::make_unique<Arrow>(cwNONE, branchEnds[i]));
+            
+            currentPoint = joinPoint.get();
+            list->add(std::move(joinPoint));
+        } else {
+            // Создаем точку соединения на уровне текущей ветви
+            auto joinPoint = std::make_unique<DrawObjectPoint>();
+            joinPoint->setPosition(maxEndX, branchY);
+            joinPoint->setInArrow(std::make_unique<Arrow>(cwNONE, branchEnds[i]));
+            joinPoint->setSecondInArrow(std::make_unique<Arrow>(cwNONE, currentPoint));
+            
+            currentPoint = joinPoint.get();
+            list->add(std::move(joinPoint));
         }
-        
-        finalPoint = currentPoint;
-        height = static_cast<int>(alternatives.size() - 1) * verticalSpacing + NS_Radius;
     }
+    
+    // Финальная точка на уровне первой ветви (baseY)
+    DrawObject* finalPoint = currentPoint;
+    
+    height = static_cast<int>(alternatives.size() - 1) * verticalSpacing + maxBranchHeight;
 
     return finalPoint;
 }
