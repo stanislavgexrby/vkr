@@ -55,6 +55,10 @@ target_compile_options(syngt_gui PRIVATE
     $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra>
 )
 
+if(MINGW)
+    target_link_options(syngt_gui PRIVATE -static-libgcc -static-libstdc++ -static)
+endif()
+
 set_target_properties(syngt_gui PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
