@@ -252,7 +252,7 @@ DrawObject* REIteration::drawObjectsToRight(
     int ward,
     int& height
 ) const {
-    // ===== Левая точка с отступом =====
+    // ===== Левая точка разветвления (1) =====
     int curWard = (ward == cwBACKWARD && fromDO->needSpike()) ?
         cwBACKWARD : cwNONE;
     
@@ -273,97 +273,71 @@ DrawObject* REIteration::drawObjectsToRight(
     const int leftY = leftPtr->y();
     list->add(std::move(leftPoint));
     
-    // ===== Создаем промежуточную точку ПОСЛЕ leftPoint для первого операнда =====
-    // Это создает отступ между leftPoint и первым элементом
-    auto startPoint = std::make_unique<DrawObjectPoint>();
-    startPoint->setPosition(leftX + MinArrowLength, leftY);
-    startPoint->setInArrow(std::make_unique<Arrow>(cwNONE, leftPtr));
-    
-    DrawObjectPoint* startPtr = startPoint.get();
-    list->add(std::move(startPoint));
-    
-    // ===== Первый операнд от startPoint =====
+    // ===== Первый операнд (верхняя ветка) =====
     int height1 = 0;
     SemanticIDList* sem1 = nullptr;
     DrawObject* firstLast = m_first->drawObjectsToRight(
-        list, sem1, startPtr, ward, height1
+        list, sem1, leftPtr, ward, height1
     );
     
     // ===== Y для нижней ветки =====
     int downY = leftY + VerticalSpace + std::max(height1, NS_Radius);
     
-    // ===== Точка вниз =====
+    // ===== Точка вниз (2) =====
+    int curWardDown = (ward == cwFORWARD) ? cwBACKWARD : cwNONE;
     auto downPoint = std::make_unique<DrawObjectPoint>();
-    downPoint->setInArrow(std::make_unique<Arrow>(cwNONE, leftPtr));
+    downPoint->setInArrow(std::make_unique<Arrow>(curWardDown, leftPtr));
     downPoint->setPosition(leftX, downY);
     
     DrawObjectPoint* downPtr = downPoint.get();
     list->add(std::move(downPoint));
     
-    // ===== Промежуточная точка для второго операнда =====
-    auto startPoint2 = std::make_unique<DrawObjectPoint>();
-    startPoint2->setPosition(leftX + MinArrowLength, downY);
-    startPoint2->setInArrow(std::make_unique<Arrow>(cwNONE, downPtr));
-    
-    DrawObjectPoint* startPtr2 = startPoint2.get();
-    list->add(std::move(startPoint2));
-    
-    // ===== Второй операнд =====
+    // ===== Второй операнд (нижняя ветка - обратная связь) =====
     int oppositeWard = -ward;
     int height2 = 0;
     SemanticIDList* sem2 = nullptr;
     DrawObject* secondLast = m_second->drawObjectsToRight(
-        list, sem2, startPtr2, oppositeWard, height2
+        list, sem2, downPtr, oppositeWard, height2
     );
     
-    // ===== Находим максимальный X =====
-    int maxX = (firstLast->endX() > secondLast->endX()) ? 
-               firstLast->endX() : secondLast->endX();
-    
-    // ===== Выравниваем =====
-    if (firstLast->endX() < maxX) {
-        int shift = maxX - firstLast->endX();
-        firstLast->move(shift, 0);
-    }
-    if (secondLast->endX() < maxX) {
-        int shift = maxX - secondLast->endX();
-        secondLast->move(shift, 0);
-    }
-    
-    // ===== Промежуточная точка перед rightPoint =====
-    // Создаем точку на maxX для схождения веток
-    auto preRightPoint = std::make_unique<DrawObjectPoint>();
-    preRightPoint->setPosition(maxX + MinArrowLength, leftY);
-    
-    // Первая стрелка от верхней ветки
-    int curWard1 = (ward == cwBACKWARD && firstLast->needSpike()) ? 
-        cwBACKWARD : cwNONE;
-    if (sem1 == nullptr) {
-        preRightPoint->setInArrow(std::make_unique<Arrow>(curWard1, firstLast));
-    } else {
-        auto arrow = std::make_unique<SemanticArrow>(
-            curWard1, firstLast, std::unique_ptr<SemanticIDList>(sem1)
-        );
-        preRightPoint->setInArrow(std::move(arrow));
-    }
-    
-    // Вторая стрелка от нижней ветки
+    // ===== Промежуточная точка после второго операнда (3) =====
+    auto secondEndPoint = std::make_unique<DrawObjectPoint>();
+    secondEndPoint->setPosition(secondLast->endX() + MinArrowLength, downY);
     if (sem2 == nullptr) {
-        preRightPoint->setSecondInArrow(std::make_unique<Arrow>(cwNONE, secondLast));
+        secondEndPoint->setInArrow(std::make_unique<Arrow>(cwNONE, secondLast));
     } else {
         auto arrow = std::make_unique<SemanticArrow>(
             cwNONE, secondLast, std::unique_ptr<SemanticIDList>(sem2)
         );
-        preRightPoint->setSecondInArrow(std::move(arrow));
+        secondEndPoint->setInArrow(std::move(arrow));
     }
     
-    DrawObjectPoint* preRightPtr = preRightPoint.get();
-    list->add(std::move(preRightPoint));
+    DrawObjectPoint* secondEndPtr = secondEndPoint.get();
+    list->add(std::move(secondEndPoint));
     
-    // ===== Правая точка с отступом =====
+    // ===== Определяем максимальный X =====
+    int maxX = (firstLast->endX() > secondEndPtr->x()) ?
+        firstLast->endX() : secondEndPtr->x();
+    
+    // ===== Правая точка схождения (6) - ОДНА точка на maxX =====
     auto rightPoint = std::make_unique<DrawObjectPoint>();
-    rightPoint->setPosition(maxX + MinArrowLength * 2, leftY);
-    rightPoint->setInArrow(std::make_unique<Arrow>(cwNONE, preRightPtr));
+    rightPoint->setPosition(maxX, leftY);
+    
+    // Первая стрелка от верхней ветки (1->6)
+    int curWard1 = (ward == cwBACKWARD && firstLast->needSpike()) ? 
+        cwBACKWARD : cwNONE;
+    if (sem1 == nullptr) {
+        rightPoint->setInArrow(std::make_unique<Arrow>(curWard1, firstLast));
+    } else {
+        auto arrow = std::make_unique<SemanticArrow>(
+            curWard1, firstLast, std::unique_ptr<SemanticIDList>(sem1)
+        );
+        rightPoint->setInArrow(std::move(arrow));
+    }
+    
+    // Вторая стрелка от промежуточной точки нижней ветки (3->6)
+    int curWardUp = (ward == cwFORWARD) ? cwFORWARD : cwNONE;
+    rightPoint->setSecondInArrow(std::make_unique<Arrow>(curWardUp, secondEndPtr));
     
     DrawObjectPoint* rightPtr = rightPoint.get();
     list->add(std::move(rightPoint));
