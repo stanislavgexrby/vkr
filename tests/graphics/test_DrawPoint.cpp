@@ -5,7 +5,7 @@ using namespace syngt::graphics;
 
 class TestDrawPoint : public DrawPoint {
 private:
-    int m_length = 100; // Фиксированная длина для теста
+    int m_length = 100;
     
 public:
     explicit TestDrawPoint(int length = 100) : m_length(length) {}
@@ -89,7 +89,6 @@ TEST_F(DrawPointTest, DifferentLengths) {
 }
 
 TEST_F(DrawPointTest, VirtualSetters) {
-    // Проверяем, что виртуальные методы вызываются правильно
     point->setXCoord(10);
     point->setYCoord(20);
     
@@ -97,7 +96,6 @@ TEST_F(DrawPointTest, VirtualSetters) {
     EXPECT_EQ(point->y(), 20);
 }
 
-// Пример теста для переопределения виртуальных методов
 class DrawPointWithNotification : public DrawPoint {
 private:
     int m_length = 50;
@@ -135,11 +133,9 @@ TEST(DrawPointVirtualTest, SettersCanBeOverridden) {
     EXPECT_TRUE(point.wasYChanged());
 }
 
-// Тест для проверки последовательности операций
 TEST(DrawPointComplexTest, ChainedOperations) {
     TestDrawPoint point(80);
     
-    // Последовательность операций как в реальном использовании
     point.setPosition(100, 150);
     EXPECT_EQ(point.x(), 100);
     EXPECT_EQ(point.y(), 150);
@@ -150,7 +146,7 @@ TEST(DrawPointComplexTest, ChainedOperations) {
     
     point.setXCoord(200);
     EXPECT_EQ(point.x(), 200);
-    EXPECT_EQ(point.y(), 180); // Y не изменился
+    EXPECT_EQ(point.y(), 180);
     
     EXPECT_EQ(point.endX(), 280); // 200 + 80
 }

@@ -8,7 +8,6 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(BUILD_CLI "Build console application" ON)
 option(BUILD_GUI "Build Qt GUI application" ON)
 option(BUILD_TESTS "Build unit tests" ON)
-option(BUILD_EXAMPLES "Build examples" ON)
 
 message(STATUS "=== SynGT C++ Configuration ===")
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
@@ -16,7 +15,6 @@ message(STATUS "C++ standard: ${CMAKE_CXX_STANDARD}")
 message(STATUS "Build CLI: ${BUILD_CLI}")
 message(STATUS "Build GUI: ${BUILD_GUI}")
 message(STATUS "Build Tests: ${BUILD_TESTS}")
-message(STATUS "Build Examples: ${BUILD_EXAMPLES}")
 
 add_subdirectory(libsyngt)
 
@@ -31,10 +29,6 @@ endif()
 if(BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)
-endif()
-
-if(BUILD_EXAMPLES)
-    add_subdirectory(examples)
 endif()
 
 find_package(Doxygen)

@@ -174,10 +174,10 @@ int cmdCheckLL1(const std::string& filename) {
         bool isLL1 = FirstFollow::isLL1(&grammar);
         
         if (isLL1) {
-            std::cout << "\n✓ Grammar is LL(1)\n";
+            std::cout << "\nGrammar is LL(1)\n";
             return 0;
         } else {
-            std::cout << "\n✗ Grammar is NOT LL(1)\n";
+            std::cout << "\nGrammar is NOT LL(1)\n";
             std::cout << "\nSuggestion: Try applying transformations:\n";
             std::cout << "  " << "syngt_cli regularize " << filename << " output.grm\n";
             return 1;
@@ -219,7 +219,7 @@ int cmdTable(const std::string& filename) {
         table->print(&grammar);
         
         if (table->hasConflicts()) {
-            std::cout << "\n⚠ Warning: Grammar has conflicts (not LL(1))\n";
+            std::cout << "\nWarning: Grammar has conflicts (not LL(1))\n";
             std::cout << "Try: syngt_cli regularize " << filename << " output.grm\n";
             return 1;
         }

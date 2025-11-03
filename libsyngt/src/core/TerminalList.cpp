@@ -30,8 +30,6 @@ std::string TerminalList::getString(int index) const {
         throw std::out_of_range("TerminalList: index out of range");
     }
     
-    // Специальная обработка epsilon (пустой строки)
-    // Epsilon всегда имеет ID=0 и отображается как @
     if (index == 0 && m_items[0].empty()) {
         return "@";
     }

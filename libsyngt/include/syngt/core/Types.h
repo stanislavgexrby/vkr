@@ -12,7 +12,6 @@ enum MarkType {
     cmOpenMacro = 2
 };
 
-// Типы списков в Grammar
 constexpr int cgTerminalList = 0;
 constexpr int cgSemanticList = 1;
 constexpr int cgNonTerminalList = 2;

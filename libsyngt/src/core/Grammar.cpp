@@ -27,9 +27,7 @@ void Grammar::fillNew() {
     m_nonTerminals->clear();
     m_macros->clear();
     
-    // Добавляем epsilon как первый терминал (ID=0)
-    // Пустая строка используется как epsilon в операциях @*, @+, [E] и т.д.
-    m_terminals->add("");  // Epsilon терминал
+    m_terminals->add("");  // Epsilon
     
     m_nonTerminals->fillNew();
 }
@@ -40,7 +38,7 @@ void Grammar::load(const std::string& filename) {
         throw std::runtime_error("Cannot open file: " + filename);
     }
     
-    fillNew();  // Инициализация включает добавление epsilon
+    fillNew();
     
     Parser parser;
     std::string line;
@@ -86,13 +84,12 @@ void Grammar::importFromGEdit(const std::string& filename) {
         throw std::runtime_error("Cannot open file: " + filename);
     }
     
-    fillNew();  // Инициализация
+    fillNew();
     
     Parser2 parser;
     std::string line;
     
     while (std::getline(file, line)) {
-        // Преобразуем к верхнему регистру для проверки
         std::string upperLine = line;
         for (char& c : upperLine) {
             c = std::toupper(static_cast<unsigned char>(c));
@@ -179,13 +176,10 @@ bool Grammar::hasRule(const std::string& name) const {
 }
 
 void Grammar::regularize() {
-    // 1. Устранение левой рекурсии
     LeftElimination::eliminate(this);
     
-    // 2. Левая факторизация
     LeftFactorization::factorizeAll(this);
     
-    // 3. Удаление бесполезных символов
     RemoveUseless::remove(this);
 }
 

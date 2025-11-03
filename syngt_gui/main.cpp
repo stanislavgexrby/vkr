@@ -22,21 +22,18 @@
 #include <sstream>
 #include <memory>
 
-// DirectX данные
 static ID3D11Device*            g_pd3dDevice = nullptr;
 static ID3D11DeviceContext*     g_pd3dDeviceContext = nullptr;
 static IDXGISwapChain*          g_pSwapChain = nullptr;
 static ID3D11RenderTargetView*  g_mainRenderTargetView = nullptr;
 
-// Forward declarations
 bool CreateDeviceD3D(HWND hWnd);
 void CleanupDeviceD3D();
 void CreateRenderTarget();
 void CleanupRenderTarget();
 LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
-// Данные приложения
-static char grammarText[1024 * 64] = ""; // 64KB для грамматики
+static char grammarText[1024 * 64] = "";
 static char outputText[1024 * 64] = "";
 static char currentFile[MAX_PATH] = "";
 static std::unique_ptr<syngt::Grammar> grammar;
@@ -47,7 +44,6 @@ static syngt::SelectionMask selectionMask;
 static bool showAbout = false;
 static bool showHelp = false;
 
-// Вспомогательные функции
 std::string LoadTextFile(const char* filename) {
     std::ifstream file(filename);
     if (!file.is_open()) {
@@ -112,7 +108,7 @@ void ClearOutput() {
     outputText[0] = '\0';
 }
 
-// Undo/Redo функции
+// Undo/Redo
 void SaveCurrentState() {
     if (!grammar) return;
     
@@ -136,7 +132,7 @@ void SaveCurrentState() {
 void Undo() {
     if (!grammar || !undoRedo.canUndo()) {
         ClearOutput();
-        AppendOutput("✗ Cannot undo!\n");
+        AppendOutput("Cannot undo!\n");
         return;
     }
     
@@ -156,7 +152,6 @@ void Undo() {
         activeNTIndex = index;
         selectionMask = selection;
         
-        // Обновляем текстовое представление
         std::string tempFile = "temp_undo.grm";
         grammar->save(tempFile);
         std::string newText = LoadTextFile(tempFile.c_str());
@@ -167,14 +162,14 @@ void Undo() {
         }
         
         ClearOutput();
-        AppendOutput("✓ Undo successful\n");
+        AppendOutput("Undo successful\n");
     }
 }
 
 void Redo() {
     if (!grammar || !undoRedo.canRedo()) {
         ClearOutput();
-        AppendOutput("✗ Cannot redo!\n");
+        AppendOutput("Cannot redo!\n");
         return;
     }
     
@@ -194,7 +189,6 @@ void Redo() {
         activeNTIndex = index;
         selectionMask = selection;
         
-        // Обновляем текстовое представление
         std::string tempFile = "temp_redo.grm";
         grammar->save(tempFile);
         std::string newText = LoadTextFile(tempFile.c_str());
@@ -205,11 +199,11 @@ void Redo() {
         }
         
         ClearOutput();
-        AppendOutput("✓ Redo successful\n");
+        AppendOutput("Redo successful\n");
     }
 }
 
-// Визуализация диаграмм
+// Syntax Grammar
 void RenderDiagram(ImDrawList* drawList, const ImVec2& offset) {
     if (!drawObjects || drawObjects->count() == 0) return;
     
@@ -218,7 +212,6 @@ void RenderDiagram(ImDrawList* drawList, const ImVec2& offset) {
     const ImU32 textColor = IM_COL32(255, 255, 255, 255);
     const ImU32 pointColor = IM_COL32(255, 255, 255, 255);
     
-    // Рисуем все объекты
     for (int i = 0; i < drawObjects->count(); ++i) {
         syngt::graphics::DrawObject* obj = (*drawObjects)[i];
         if (!obj) continue;
@@ -228,14 +221,13 @@ void RenderDiagram(ImDrawList* drawList, const ImVec2& offset) {
         
         int type = obj->getType();
         
-        // Рисуем в зависимости от типа
         if (type == syngt::graphics::ctDrawObjectTerminal) {
-            // Терминал - овал
+            // Terminal
             float w = obj->getLength() * scale / 2.0f;
             float h = 20.0f * scale;
             drawList->AddEllipse(ImVec2(x + w, y), ImVec2(w, h), lineColor, 0, 0, 2.0f);
             
-            // Текст
+            // Text
             auto leaf = dynamic_cast<syngt::graphics::DrawObjectLeaf*>(obj);
             if (leaf) {
                 std::string name = leaf->name();
@@ -244,7 +236,7 @@ void RenderDiagram(ImDrawList* drawList, const ImVec2& offset) {
             }
         }
         else if (type == syngt::graphics::ctDrawObjectNonTerminal) {
-            // Нетерминал - прямоугольник
+            // Nonterminal
             float w = obj->getLength() * scale;
             float h = 40.0f * scale;
             drawList->AddRect(ImVec2(x, y - h/2), ImVec2(x + w, y + h/2), lineColor, 0.0f, 0, 2.0f);
@@ -257,7 +249,7 @@ void RenderDiagram(ImDrawList* drawList, const ImVec2& offset) {
             }
         }
         else if (type == syngt::graphics::ctDrawObjectFirst) {
-            // Начало - треугольник
+            // Begin
             drawList->AddTriangleFilled(
                 ImVec2(x, y - 10),
                 ImVec2(x, y + 10),
@@ -266,7 +258,7 @@ void RenderDiagram(ImDrawList* drawList, const ImVec2& offset) {
             );
         }
         else if (type == syngt::graphics::ctDrawObjectLast) {
-            // Конец - треугольник
+            // End
             drawList->AddTriangleFilled(
                 ImVec2(x + 15, y - 10),
                 ImVec2(x + 15, y + 10),
@@ -276,11 +268,10 @@ void RenderDiagram(ImDrawList* drawList, const ImVec2& offset) {
         }
         else if (type == syngt::graphics::ctDrawObjectPoint || 
                  type == syngt::graphics::ctDrawObjectExtendedPoint) {
-            // Точка - маленький кружок
+            // Point
             drawList->AddCircleFilled(ImVec2(x, y), 3.0f, pointColor);
         }
         
-        // Рисуем первую входящую стрелку
         syngt::graphics::Arrow* arrow = obj->inArrow();
         if (arrow && arrow->getFromDO()) {
             syngt::graphics::DrawObject* from = dynamic_cast<syngt::graphics::DrawObject*>(arrow->getFromDO());
@@ -293,7 +284,6 @@ void RenderDiagram(ImDrawList* drawList, const ImVec2& offset) {
             }
         }
         
-        // Рисуем вторую входящую стрелку для DrawObjectPoint (критично для OR!)
         if (type == syngt::graphics::ctDrawObjectPoint) {
             auto point = dynamic_cast<syngt::graphics::DrawObjectPoint*>(obj);
             if (point && point->secondInArrow()) {
@@ -319,7 +309,6 @@ void UpdateDiagram() {
         return;
     }
     
-    // Получаем активный нетерминал
     auto nts = grammar->getNonTerminals();
     if (activeNTIndex < 0 || activeNTIndex >= static_cast<int>(nts.size())) {
         activeNTIndex = 0;
@@ -336,17 +325,15 @@ void UpdateDiagram() {
         return;
     }
     
-    // Создаем визуализацию
     drawObjects = std::make_unique<syngt::graphics::DrawObjectList>(grammar.get());
     syngt::Creator::createDrawObjects(drawObjects.get(), item->root());
 }
 
-// Операции с грамматикой
+// Grammar Operations
 void ParseGrammar() {
     try {
         ClearOutput();
         
-        // Создаем временный файл для парсинга
         std::string tempFile = "temp_grammar.grm";
         SaveTextFile(tempFile.c_str(), grammarText);
         
@@ -355,9 +342,8 @@ void ParseGrammar() {
         
         std::remove(tempFile.c_str());
         
-        AppendOutput("✓ Grammar parsed successfully!\n\n");
+        AppendOutput("Grammar parsed successfully!\n\n");
         
-        // Выводим статистику
         char stats[512];
         snprintf(stats, sizeof(stats), 
                  "Terminals: %d\nNon-terminals: %zu\nSemantics: %d\nMacros: %d\n",
@@ -367,15 +353,13 @@ void ParseGrammar() {
                  grammar->macros()->getCount());
         AppendOutput(stats);
         
-        // Сохраняем состояние для Undo/Redo
         SaveCurrentState();
         
-        // Обновляем диаграмму
         UpdateDiagram();
         
     } catch (const std::exception& e) {
         ClearOutput();
-        AppendOutput("✗ Parse Error:\n");
+        AppendOutput("Parse Error:\n");
         AppendOutput(e.what());
         AppendOutput("\n");
         grammar.reset();
@@ -392,23 +376,22 @@ void LoadFile() {
         std::string content = LoadTextFile(filename.c_str());
         
         if (content.size() >= sizeof(grammarText)) {
-            AppendOutput("✗ File too large!\n");
+            AppendOutput("File too large!\n");
             return;
         }
         
         strcpy_s(grammarText, sizeof(grammarText), content.c_str());
         strcpy_s(currentFile, sizeof(currentFile), filename.c_str());
         
-        AppendOutput("✓ File loaded: ");
+        AppendOutput("File loaded: ");
         AppendOutput(filename.c_str());
         AppendOutput("\n");
         
-        // Автоматически парсим
         ParseGrammar();
         
     } catch (const std::exception& e) {
         ClearOutput();
-        AppendOutput("✗ Load Error:\n");
+        AppendOutput("Load Error:\n");
         AppendOutput(e.what());
         AppendOutput("\n");
     }
@@ -428,12 +411,12 @@ void SaveFile() {
     try {
         SaveTextFile(filename.c_str(), grammarText);
         ClearOutput();
-        AppendOutput("✓ File saved: ");
+        AppendOutput("File saved: ");
         AppendOutput(filename.c_str());
         AppendOutput("\n");
     } catch (const std::exception& e) {
         ClearOutput();
-        AppendOutput("✗ Save Error:\n");
+        AppendOutput("Save Error:\n");
         AppendOutput(e.what());
         AppendOutput("\n");
     }
@@ -450,7 +433,7 @@ void SaveFileAs() {
 void EliminateLeftRecursion() {
     if (!grammar) {
         ClearOutput();
-        AppendOutput("✗ Please parse grammar first!\n");
+        AppendOutput("Please parse grammar first!\n");
         return;
     }
     
@@ -458,7 +441,6 @@ void EliminateLeftRecursion() {
         ClearOutput();
         syngt::LeftElimination::eliminate(grammar.get());
         
-        // Сохраняем результат обратно в текст
         std::string tempFile = "temp_result.grm";
         grammar->save(tempFile);
         std::string newGrammar = LoadTextFile(tempFile.c_str());
@@ -468,14 +450,13 @@ void EliminateLeftRecursion() {
             strcpy_s(grammarText, sizeof(grammarText), newGrammar.c_str());
         }
         
-        AppendOutput("✓ Left recursion eliminated!\n");
+        AppendOutput("Left recursion eliminated!\n");
         
-        // Сохраняем состояние и обновляем диаграмму
         SaveCurrentState();
         UpdateDiagram();
     } catch (const std::exception& e) {
         ClearOutput();
-        AppendOutput("✗ Error:\n");
+        AppendOutput("Error:\n");
         AppendOutput(e.what());
         AppendOutput("\n");
     }
@@ -484,7 +465,7 @@ void EliminateLeftRecursion() {
 void LeftFactorize() {
     if (!grammar) {
         ClearOutput();
-        AppendOutput("✗ Please parse grammar first!\n");
+        AppendOutput("Please parse grammar first!\n");
         return;
     }
     
@@ -492,7 +473,6 @@ void LeftFactorize() {
         ClearOutput();
         syngt::LeftFactorization::factorizeAll(grammar.get());
         
-        // Сохраняем результат
         std::string tempFile = "temp_result.grm";
         grammar->save(tempFile);
         std::string newGrammar = LoadTextFile(tempFile.c_str());
@@ -502,13 +482,13 @@ void LeftFactorize() {
             strcpy_s(grammarText, sizeof(grammarText), newGrammar.c_str());
         }
         
-        AppendOutput("✓ Left factorization completed!\n");
+        AppendOutput("Left factorization completed!\n");
         
         SaveCurrentState();
         UpdateDiagram();
     } catch (const std::exception& e) {
         ClearOutput();
-        AppendOutput("✗ Error:\n");
+        AppendOutput("Error:\n");
         AppendOutput(e.what());
         AppendOutput("\n");
     }
@@ -517,7 +497,7 @@ void LeftFactorize() {
 void RemoveUselessSymbols() {
     if (!grammar) {
         ClearOutput();
-        AppendOutput("✗ Please parse grammar first!\n");
+        AppendOutput("Please parse grammar first!\n");
         return;
     }
     
@@ -525,7 +505,6 @@ void RemoveUselessSymbols() {
         ClearOutput();
         syngt::RemoveUseless::remove(grammar.get());
         
-        // Сохраняем результат
         std::string tempFile = "temp_result.grm";
         grammar->save(tempFile);
         std::string newGrammar = LoadTextFile(tempFile.c_str());
@@ -535,13 +514,13 @@ void RemoveUselessSymbols() {
             strcpy_s(grammarText, sizeof(grammarText), newGrammar.c_str());
         }
         
-        AppendOutput("✓ Useless symbols removed!\n");
+        AppendOutput("Useless symbols removed!\n");
         
         SaveCurrentState();
         UpdateDiagram();
     } catch (const std::exception& e) {
         ClearOutput();
-        AppendOutput("✗ Error:\n");
+        AppendOutput("Error:\n");
         AppendOutput(e.what());
         AppendOutput("\n");
     }
@@ -550,24 +529,22 @@ void RemoveUselessSymbols() {
 void CheckLL1() {
     if (!grammar) {
         ClearOutput();
-        AppendOutput("✗ Please parse grammar first!\n");
+        AppendOutput("Please parse grammar first!\n");
         return;
     }
     
     try {
         ClearOutput();
         
-        // Вычисляем First и Follow
         auto firstSets = syngt::FirstFollow::computeFirst(grammar.get());
         auto followSets = syngt::FirstFollow::computeFollow(grammar.get(), firstSets);
         
-        // Строим таблицу разбора
         auto table = syngt::ParsingTable::build(grammar.get());
         
         if (table->getConflicts().empty()) {
-            AppendOutput("✓ Grammar IS LL(1)!\n\n");
+            AppendOutput("Grammar IS LL(1)!\n\n");
         } else {
-            AppendOutput("✗ Grammar IS NOT LL(1)!\n\n");
+            AppendOutput("Grammar IS NOT LL(1)!\n\n");
             AppendOutput("Conflicts:\n");
             for (const auto& conflict : table->getConflicts()) {
                 AppendOutput("  ");
@@ -577,7 +554,6 @@ void CheckLL1() {
             AppendOutput("\n");
         }
         
-        // Выводим First sets
         AppendOutput("FIRST sets:\n");
         for (const auto& [nt, firstSet] : firstSets) {
             char line[256];
@@ -618,7 +594,7 @@ void CheckLL1() {
         
     } catch (const std::exception& e) {
         ClearOutput();
-        AppendOutput("✗ Error:\n");
+        AppendOutput("Error:\n");
         AppendOutput(e.what());
         AppendOutput("\n");
     }
@@ -655,7 +631,6 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 int main(int, char**)
 {
-    // Создаем окно
     WNDCLASSEXW wc = { sizeof(wc), CS_CLASSDC, WndProc, 0L, 0L, GetModuleHandle(nullptr), 
                        nullptr, nullptr, nullptr, nullptr, L"SynGT", nullptr };
     ::RegisterClassExW(&wc);
@@ -663,7 +638,6 @@ int main(int, char**)
                                  WS_OVERLAPPEDWINDOW, 100, 100, 1280, 800, 
                                  nullptr, nullptr, wc.hInstance, nullptr);
 
-    // Инициализация Direct3D
     if (!CreateDeviceD3D(hwnd))
     {
         CleanupDeviceD3D();
@@ -674,17 +648,16 @@ int main(int, char**)
     ::ShowWindow(hwnd, SW_SHOWDEFAULT);
     ::UpdateWindow(hwnd);
 
-    // Setup Dear ImGui
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO(); (void)io;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-    io.IniFilename = "syngt.ini"; // Сохраняем layout
+    io.IniFilename = "syngt.ini";
 
     // Setup style
     ImGui::StyleColorsDark();
     
-    // Настройка цветовой схемы
+    // Color style
     ImGuiStyle& style = ImGui::GetStyle();
     style.WindowRounding = 5.0f;
     style.FrameRounding = 3.0f;
@@ -695,10 +668,9 @@ int main(int, char**)
     ImGui_ImplWin32_Init(hwnd);
     ImGui_ImplDX11_Init(g_pd3dDevice, g_pd3dDeviceContext);
 
-    // Загружаем шрифт побольше для удобства
     io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\consola.ttf", 16.0f);
     
-    // Пример грамматики по умолчанию
+    // Default example
     const char* exampleGrammar = 
         "# Example grammar\n"
         "S : A, B.\n"
@@ -758,7 +730,6 @@ int main(int, char**)
                 ImGui::EndMenu();
             }
             
-            // Показываем текущий файл
             ImGui::SameLine(io.DisplaySize.x - 400);
             if (currentFile[0] != '\0') {
                 ImGui::Text("File: %s", currentFile);
@@ -769,7 +740,6 @@ int main(int, char**)
             ImGui::EndMainMenuBar();
         }
 
-        // Главное окно
         ImGui::SetNextWindowPos(ImVec2(0, ImGui::GetFrameHeight()));
         ImGui::SetNextWindowSize(ImVec2(io.DisplaySize.x, io.DisplaySize.y - ImGui::GetFrameHeight()));
         ImGui::Begin("SynGT Main", nullptr, 
@@ -779,12 +749,9 @@ int main(int, char**)
         // Splitter
         static float leftWidth = io.DisplaySize.x * 0.55f;
         
-        // Левая панель - редактор грамматики и диаграмма
         ImGui::BeginChild("LeftPanel", ImVec2(leftWidth, 0), true);
         
-        // Вкладки
         if (ImGui::BeginTabBar("LeftTabs")) {
-            // Вкладка редактора
             if (ImGui::BeginTabItem("Grammar Editor")) {
                 ImGui::Text("Editor");
                 ImGui::SameLine();
@@ -801,9 +768,7 @@ int main(int, char**)
                 ImGui::EndTabItem();
             }
             
-            // Вкладка диаграммы
             if (ImGui::BeginTabItem("Syntax Diagram")) {
-                // Список нетерминалов для выбора
                 if (grammar && !grammar->getNonTerminals().empty()) {
                     auto nts = grammar->getNonTerminals();
                     
@@ -830,7 +795,6 @@ int main(int, char**)
                     
                     ImGui::Separator();
                     
-                    // Область для рисования диаграммы
                     ImGui::BeginChild("DiagramCanvas", ImVec2(0, 0), false);
                     
                     if (drawObjects && drawObjects->count() > 0) {
@@ -838,12 +802,10 @@ int main(int, char**)
                         ImVec2 canvasPos = ImGui::GetCursorScreenPos();
                         ImVec2 canvasSize = ImGui::GetContentRegionAvail();
                         
-                        // Белый фон
                         drawList->AddRectFilled(canvasPos, 
                                                ImVec2(canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y),
                                                IM_COL32(30, 30, 35, 255));
                         
-                        // Рисуем диаграмму
                         RenderDiagram(drawList, ImVec2(canvasPos.x + 20, canvasPos.y + 50));
                     } else {
                         ImGui::Text("No diagram to display. Parse grammar first.");
@@ -864,7 +826,6 @@ int main(int, char**)
 
         ImGui::SameLine();
 
-        // Правая панель - операции и вывод
         ImGui::BeginChild("RightPanel", ImVec2(0, 0), true);
         
         ImGui::Text("Operations");

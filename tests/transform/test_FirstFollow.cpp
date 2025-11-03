@@ -40,7 +40,7 @@ TEST_F(FirstFollowTest, FirstSequence) {
     int bId = grammar->findTerminal("b");
     
     EXPECT_TRUE(firstSets["S"].count(aId) > 0);
-    EXPECT_FALSE(firstSets["S"].count(bId) > 0);  // 'b' не в FIRST
+    EXPECT_FALSE(firstSets["S"].count(bId) > 0);
 }
 
 TEST_F(FirstFollowTest, FirstAlternatives) {
@@ -86,8 +86,7 @@ TEST_F(FirstFollowTest, FirstWithNonTerminal) {
 
 TEST_F(FirstFollowTest, FirstWithNullableNonTerminal) {
     // S → A 'b'
-    // A → @  (epsilon/пустое правило)
-    // A nullable, поэтому FIRST(S) = FIRST(A) ∪ FIRST('b') = {'b'}
+    // A → @
     
     grammar->addNonTerminal("A");
     grammar->setNTRule("S", "A , 'b'.");
@@ -100,12 +99,10 @@ TEST_F(FirstFollowTest, FirstWithNullableNonTerminal) {
     
     int bId = grammar->findTerminal("b");
     
-    // FIRST(S) должен содержать 'b' (так как A nullable)
     EXPECT_TRUE(firstSets["S"].count(bId) > 0);
 }
 
 TEST_F(FirstFollowTest, FirstRecursiveGrammar) {
-    // Классическая арифметическая грамматика
     // E → T E'
     // E' → '+' T E' | @
     // T → 'num'
@@ -143,7 +140,6 @@ TEST_F(FirstFollowTest, FollowStartSymbol) {
     auto followSets = FirstFollow::computeFollow(grammar.get(), firstSets);
     
     ASSERT_TRUE(followSets.count("S") > 0);
-    // $ представлен как -1
     EXPECT_TRUE(followSets["S"].count(-1) > 0);
 }
 
@@ -161,16 +157,13 @@ TEST_F(FirstFollowTest, FollowBasic) {
     
     int bId = grammar->findTerminal("b");
     
-    // FOLLOW(A) должен содержать 'b'
     EXPECT_TRUE(followSets["A"].count(bId) > 0);
 }
 
 TEST_F(FirstFollowTest, LL1Valid) {
-    // LL(1) грамматика:
     // S → 'a' A | 'b' B
     // A → 'c'
     // B → 'd'
-    // Нет пересечений FIRST
     
     grammar->addNonTerminal("A");
     grammar->addNonTerminal("B");
@@ -184,7 +177,6 @@ TEST_F(FirstFollowTest, LL1Valid) {
 }
 
 TEST_F(FirstFollowTest, LL1Invalid_FirstConflict) {
-    // Не LL(1): обе альтернативы начинаются с 'a'
     // S → 'a' 'b' | 'a' 'c'
     
     grammar->setNTRule("S", "'a' , 'b' ; 'a' , 'c'.");
@@ -194,23 +186,19 @@ TEST_F(FirstFollowTest, LL1Invalid_FirstConflict) {
 }
 
 TEST_F(FirstFollowTest, LL1AfterFactorization) {
-    // После левой факторизации должна стать LL(1)
     // До: S → 'a' 'b' | 'a' 'c'  (не LL(1))
     
     grammar->setNTRule("S", "'a' , 'b' ; 'a' , 'c'.");
     
     EXPECT_FALSE(FirstFollow::isLL1(grammar.get()));
     
-    // Применяем факторизацию
     LeftFactorization::factorize(grammar->getNTItem("S"), grammar.get());
     
-    // После факторизации: S → 'a' S', S' → 'b' | 'c'  (LL(1))
     bool isLL1After = FirstFollow::isLL1(grammar.get());
     EXPECT_TRUE(isLL1After);
 }
 
 TEST_F(FirstFollowTest, ComplexGrammar) {
-    // Более сложная грамматика
     // S → A B
     // A → 'a' A | @
     // B → 'b' B | @

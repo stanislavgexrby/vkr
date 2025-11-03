@@ -112,6 +112,7 @@ DrawObject* REAnd::drawObjectsToRight(
     return result;
 }
 
+// REOr::drawObjectsToRight
 DrawObject* REOr::drawObjectsToRight(
     DrawObjectList* list,
     SemanticIDList*& semantics,
@@ -119,7 +120,6 @@ DrawObject* REOr::drawObjectsToRight(
     int ward,
     int& height
 ) const {
-    // ===== Flatten nested ORs =====
     std::function<void(const RETree*, std::vector<const RETree*>&)> flatten;
     flatten = [&](const RETree* node, std::vector<const RETree*>& out) {
         if (!node) return;
@@ -155,7 +155,6 @@ DrawObject* REOr::drawObjectsToRight(
     const int baseY = leftPtr->y();
     list->add(std::move(leftPoint));
 
-    // ===== Рисуем каждую альтернативную ветвь =====
     std::vector<DrawObject*> branchEnds;
     const int verticalSpacing = 60;
     int maxBranchHeight = 0;
@@ -165,10 +164,8 @@ DrawObject* REOr::drawObjectsToRight(
         int branchY = baseY + static_cast<int>(i) * verticalSpacing;
 
         if (i == 0) {
-            // Первая альтернатива идет напрямую от левой точки
             branchStart = leftPtr;
         } else {
-            // Остальные альтернативы - создаем новые точки на своем уровне Y
             auto branchJoin = std::make_unique<DrawObjectPoint>();
             branchJoin->setPosition(baseX, branchY);
             branchJoin->setInArrow(std::make_unique<Arrow>(cwNONE, leftPtr));
@@ -179,7 +176,6 @@ DrawObject* REOr::drawObjectsToRight(
         int branchHeight = 0;
         SemanticIDList* sem = nullptr;
 
-        // Рисуем содержимое ветви
         DrawObject* branchEnd = alternatives[i]->drawObjectsToRight(
             list, sem, branchStart, ward, branchHeight
         );
@@ -191,7 +187,6 @@ DrawObject* REOr::drawObjectsToRight(
         branchEnds.push_back(branchEnd);
     }
 
-    // ===== Находим максимальный X среди всех ветвей =====
     int maxEndX = baseX;
     for (auto* branchEnd : branchEnds) {
         if (branchEnd->endX() > maxEndX)
@@ -199,15 +194,12 @@ DrawObject* REOr::drawObjectsToRight(
     }
     maxEndX += MinArrowLength;
 
-    // ===== Создаем правую точку соединения на maxEndX =====
-    // Создаем каскад точек снизу вверх для схождения веток
     DrawObjectPoint* currentPoint = nullptr;
     
     for (int i = static_cast<int>(branchEnds.size()) - 1; i >= 0; --i) {
         int branchY = baseY + i * verticalSpacing;
         
         if (i == static_cast<int>(branchEnds.size()) - 1) {
-            // Самая нижняя ветвь
             auto joinPoint = std::make_unique<DrawObjectPoint>();
             joinPoint->setPosition(maxEndX, branchY);
             joinPoint->setInArrow(std::make_unique<Arrow>(cwNONE, branchEnds[i]));
@@ -215,7 +207,6 @@ DrawObject* REOr::drawObjectsToRight(
             currentPoint = joinPoint.get();
             list->add(std::move(joinPoint));
         } else {
-            // Создаем точку соединения на уровне текущей ветви
             auto joinPoint = std::make_unique<DrawObjectPoint>();
             joinPoint->setPosition(maxEndX, branchY);
             joinPoint->setInArrow(std::make_unique<Arrow>(cwNONE, branchEnds[i]));
@@ -226,7 +217,6 @@ DrawObject* REOr::drawObjectsToRight(
         }
     }
     
-    // Финальная точка на уровне первой ветви (baseY)
     DrawObject* finalPoint = currentPoint;
     
     height = static_cast<int>(alternatives.size() - 1) * verticalSpacing + maxBranchHeight;
@@ -234,6 +224,7 @@ DrawObject* REOr::drawObjectsToRight(
     return finalPoint;
 }
 
+// REIteration::drawObjectsToRight
 DrawObject* REIteration::drawObjectsToRight(
     DrawObjectList* list,
     SemanticIDList*& semantics,
@@ -241,7 +232,6 @@ DrawObject* REIteration::drawObjectsToRight(
     int ward,
     int& height
 ) const {
-    // ===== Левая точка разветвления (1) =====
     int curWard = (ward == cwBACKWARD && fromDO->needSpike()) ?
         cwBACKWARD : cwNONE;
     
@@ -262,17 +252,14 @@ DrawObject* REIteration::drawObjectsToRight(
     const int leftY = leftPtr->y();
     list->add(std::move(leftPoint));
     
-    // ===== Первый операнд (верхняя ветка) =====
     int height1 = 0;
     SemanticIDList* sem1 = nullptr;
     DrawObject* firstLast = m_first->drawObjectsToRight(
         list, sem1, leftPtr, ward, height1
     );
     
-    // ===== Y для нижней ветки =====
     int downY = leftY + VerticalSpace + std::max(height1, NS_Radius);
     
-    // ===== Точка вниз (2) =====
     int curWardDown = (ward == cwFORWARD) ? cwBACKWARD : cwNONE;
     auto downPoint = std::make_unique<DrawObjectPoint>();
     downPoint->setInArrow(std::make_unique<Arrow>(curWardDown, leftPtr));
@@ -281,7 +268,6 @@ DrawObject* REIteration::drawObjectsToRight(
     DrawObjectPoint* downPtr = downPoint.get();
     list->add(std::move(downPoint));
     
-    // ===== Второй операнд (нижняя ветка - обратная связь) =====
     int oppositeWard = -ward;
     int height2 = 0;
     SemanticIDList* sem2 = nullptr;
@@ -289,7 +275,6 @@ DrawObject* REIteration::drawObjectsToRight(
         list, sem2, downPtr, oppositeWard, height2
     );
     
-    // ===== Промежуточная точка после второго операнда (3) =====
     auto secondEndPoint = std::make_unique<DrawObjectPoint>();
     secondEndPoint->setPosition(secondLast->endX() + MinArrowLength, downY);
     if (sem2 == nullptr) {
@@ -304,15 +289,12 @@ DrawObject* REIteration::drawObjectsToRight(
     DrawObjectPoint* secondEndPtr = secondEndPoint.get();
     list->add(std::move(secondEndPoint));
     
-    // ===== Определяем максимальный X =====
     int maxX = (firstLast->endX() > secondEndPtr->x()) ?
         firstLast->endX() : secondEndPtr->x();
     
-    // ===== Правая точка схождения (6) - ОДНА точка на maxX =====
     auto rightPoint = std::make_unique<DrawObjectPoint>();
     rightPoint->setPosition(maxX, leftY);
     
-    // Первая стрелка от верхней ветки (1->6)
     int curWard1 = (ward == cwBACKWARD && firstLast->needSpike()) ? 
         cwBACKWARD : cwNONE;
     if (sem1 == nullptr) {
@@ -324,14 +306,12 @@ DrawObject* REIteration::drawObjectsToRight(
         rightPoint->setInArrow(std::move(arrow));
     }
     
-    // Вторая стрелка от промежуточной точки нижней ветки (3->6)
     int curWardUp = (ward == cwFORWARD) ? cwFORWARD : cwNONE;
     rightPoint->setSecondInArrow(std::make_unique<Arrow>(curWardUp, secondEndPtr));
     
     DrawObjectPoint* rightPtr = rightPoint.get();
     list->add(std::move(rightPoint));
     
-    // ===== Высота =====
     int cy = height1 + VerticalSpace;
     if (height2 > 0) {
         cy += height2;
@@ -351,7 +331,6 @@ DrawObject* RENonTerminal::drawObjectsToRight(
     int ward,
     int& height
 ) const {
-    // Если нетерминал "открыт", рекурсивно обрабатываем его корень
     if (m_isOpen) {
         RETree* root = getRoot();
         if (root) {
@@ -359,7 +338,6 @@ DrawObject* RENonTerminal::drawObjectsToRight(
         }
     }
     
-    // Иначе создаем графический объект нетерминала
     height = NS_Radius;
     
     auto nonTerminal = std::make_unique<DrawObjectNonTerminal>(m_grammar, m_id);
@@ -372,4 +350,4 @@ DrawObject* RENonTerminal::drawObjectsToRight(
     return result;
 }
 
-} // namespace syngt
+}

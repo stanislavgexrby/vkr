@@ -13,7 +13,6 @@
 
 namespace syngt {
 
-// Вспомогательная структура для хранения информации о nullable
 struct NullableInfo {
     std::map<std::string, bool> nullable;
     
@@ -23,17 +22,14 @@ struct NullableInfo {
     }
 };
 
-// Вычислить nullable для всех нетерминалов
 static NullableInfo computeNullable(Grammar* grammar) {
     NullableInfo info;
     auto nts = grammar->getNonTerminals();
     
-    // Инициализация
     for (const auto& nt : nts) {
         info.nullable[nt] = false;
     }
     
-    // Итеративно вычисляем nullable
     bool changed = true;
     int iterations = 0;
     
@@ -42,25 +38,21 @@ static NullableInfo computeNullable(Grammar* grammar) {
         iterations++;
         
         for (const auto& ntName : nts) {
-            if (info.nullable[ntName]) continue;  // Уже nullable
+            if (info.nullable[ntName]) continue;
             
             NTListItem* nt = grammar->getNTItem(ntName);
             if (!nt || !nt->hasRoot()) continue;
             
-            // Проверяем может ли правило вывести epsilon
             std::function<bool(const RETree*)> checkNullable = [&](const RETree* tree) -> bool {
                 if (!tree) return true;
                 
-                // Семантика @ - epsilon
+                // @ - epsilon
                 if (dynamic_cast<const RESemantic*>(tree)) return true;
                 
-                // Терминал - не nullable
                 if (dynamic_cast<const RETerminal*>(tree)) return false;
                 
-                // Iteration - всегда nullable (может быть 0 раз)
                 if (dynamic_cast<const REIteration*>(tree)) return true;
                 
-                // Нетерминал - смотрим в таблицу
                 if (auto ntNode = dynamic_cast<const RENonTerminal*>(tree)) {
                     if (ntNode->grammar()) {
                         auto nts2 = ntNode->grammar()->getNonTerminals();
@@ -72,12 +64,10 @@ static NullableInfo computeNullable(Grammar* grammar) {
                     return false;
                 }
                 
-                // Or - nullable если хотя бы одна ветка nullable
                 if (auto orNode = dynamic_cast<const REOr*>(tree)) {
                     return checkNullable(orNode->left()) || checkNullable(orNode->right());
                 }
                 
-                // And - nullable если обе ветки nullable
                 if (auto andNode = dynamic_cast<const REAnd*>(tree)) {
                     return checkNullable(andNode->left()) && checkNullable(andNode->right());
                 }
@@ -102,15 +92,12 @@ std::map<std::string, FirstFollow::TerminalSet> FirstFollow::computeFirst(Gramma
     std::map<std::string, TerminalSet> firstSets;
     auto nts = grammar->getNonTerminals();
     
-    // Вычисляем nullable
     NullableInfo nullableInfo = computeNullable(grammar);
     
-    // Инициализация
     for (const auto& nt : nts) {
         firstSets[nt] = TerminalSet();
     }
     
-    // Итеративно вычисляем FIRST
     bool changed = true;
     int iterations = 0;
     
@@ -124,23 +111,19 @@ std::map<std::string, FirstFollow::TerminalSet> FirstFollow::computeFirst(Gramma
             
             size_t oldSize = firstSets[ntName].size();
             
-            // Вычисляем FIRST для правила
             std::function<TerminalSet(const RETree*)> getFirst = [&](const RETree* tree) -> TerminalSet {
                 TerminalSet result;
                 if (!tree) return result;
                 
-                // Терминал
                 if (auto term = dynamic_cast<const RETerminal*>(tree)) {
                     result.insert(term->getID());
                     return result;
                 }
                 
-                // Семантика - пусто
                 if (dynamic_cast<const RESemantic*>(tree)) {
                     return result;
                 }
                 
-                // Нетерминал - берем из таблицы
                 if (auto ntNode = dynamic_cast<const RENonTerminal*>(tree)) {
                     if (ntNode->grammar()) {
                         auto nts2 = ntNode->grammar()->getNonTerminals();
@@ -155,7 +138,6 @@ std::map<std::string, FirstFollow::TerminalSet> FirstFollow::computeFirst(Gramma
                     return result;
                 }
                 
-                // Or - объединение
                 if (auto orNode = dynamic_cast<const REOr*>(tree)) {
                     auto left = getFirst(orNode->left());
                     auto right = getFirst(orNode->right());
@@ -164,12 +146,10 @@ std::map<std::string, FirstFollow::TerminalSet> FirstFollow::computeFirst(Gramma
                     return result;
                 }
                 
-                // And - FIRST левого, если nullable добавляем FIRST правого
                 if (auto andNode = dynamic_cast<const REAnd*>(tree)) {
                     auto left = getFirst(andNode->left());
                     result.insert(left.begin(), left.end());
                     
-                    // Проверяем nullable левого
                     bool leftNullable = false;
                     if (auto ntNode = dynamic_cast<const RENonTerminal*>(andNode->left())) {
                         if (ntNode->grammar()) {
@@ -192,7 +172,6 @@ std::map<std::string, FirstFollow::TerminalSet> FirstFollow::computeFirst(Gramma
                     return result;
                 }
                 
-                // Iteration
                 if (auto iterNode = dynamic_cast<const REIteration*>(tree)) {
                     return getFirst(iterNode->left());
                 }
@@ -221,20 +200,16 @@ std::map<std::string, FirstFollow::TerminalSet> FirstFollow::computeFollow(
     std::map<std::string, TerminalSet> followSets;
     auto nts = grammar->getNonTerminals();
     
-    // Вычисляем nullable
     NullableInfo nullableInfo = computeNullable(grammar);
     
-    // Инициализация
     for (const auto& nt : nts) {
         followSets[nt] = TerminalSet();
     }
     
-    // Стартовый символ имеет $ в FOLLOW
     if (!nts.empty()) {
         followSets[nts[0]].insert(-1);  // $ = EOF
     }
     
-    // Итеративно вычисляем FOLLOW
     bool changed = true;
     int iterations = 0;
     
@@ -242,16 +217,13 @@ std::map<std::string, FirstFollow::TerminalSet> FirstFollow::computeFollow(
         changed = false;
         iterations++;
         
-        // Для каждого правила A → α
         for (const auto& ntNameA : nts) {
             NTListItem* ntA = grammar->getNTItem(ntNameA);
             if (!ntA || !ntA->hasRoot()) continue;
             
-            // Анализируем правило: ищем вхождения нетерминалов
             std::function<void(const RETree*, bool)> analyzeTree = [&](const RETree* tree, bool afterNullable) {
                 if (!tree) return;
                 
-                // Если это нетерминал B
                 if (auto ntB = dynamic_cast<const RENonTerminal*>(tree)) {
                     if (ntB->grammar()) {
                         auto nts2 = ntB->grammar()->getNonTerminals();
@@ -259,8 +231,6 @@ std::map<std::string, FirstFollow::TerminalSet> FirstFollow::computeFollow(
                         if (id >= 0 && id < static_cast<int>(nts2.size())) {
                             std::string nameB = nts2[id];
                             
-                            // Если B последний или после него nullable
-                            // FOLLOW(B) += FOLLOW(A)
                             if (afterNullable) {
                                 size_t oldSize = followSets[nameB].size();
                                 followSets[nameB].insert(followSets[ntNameA].begin(), followSets[ntNameA].end());
@@ -275,7 +245,6 @@ std::map<std::string, FirstFollow::TerminalSet> FirstFollow::computeFollow(
                 
                 // And: A → ... B β
                 if (auto andNode = dynamic_cast<const REAnd*>(tree)) {
-                    // Анализируем левую часть
                     if (auto ntB = dynamic_cast<const RENonTerminal*>(andNode->left())) {
                         if (ntB->grammar()) {
                             auto nts2 = ntB->grammar()->getNonTerminals();
@@ -311,7 +280,7 @@ std::map<std::string, FirstFollow::TerminalSet> FirstFollow::computeFollow(
                                     changed = true;
                                 }
                                 
-                                // Если β nullable, FOLLOW(B) += FOLLOW(A)
+                                // β - nullable, FOLLOW(B) += FOLLOW(A)
                                 bool betaNullable = false;
                                 if (auto ntBeta = dynamic_cast<const RENonTerminal*>(andNode->right())) {
                                     if (ntBeta->grammar()) {
@@ -337,7 +306,6 @@ std::map<std::string, FirstFollow::TerminalSet> FirstFollow::computeFollow(
                         }
                     }
                     
-                    // Рекурсивно обрабатываем обе части
                     analyzeTree(andNode->left(), false);
                     
                     bool rightNullable = false;
@@ -367,7 +335,7 @@ std::map<std::string, FirstFollow::TerminalSet> FirstFollow::computeFollow(
                 
                 // Iteration
                 if (auto iterNode = dynamic_cast<const REIteration*>(tree)) {
-                    analyzeTree(iterNode->left(), true);  // После iteration всегда nullable
+                    analyzeTree(iterNode->left(), true);
                 }
             };
             
@@ -410,8 +378,7 @@ bool FirstFollow::checkLL1ForNT(
     if (alternatives.size() < 2) return true;
     
     NullableInfo nullableInfo;
-    // Упрощенная проверка nullable для альтернатив
-    
+
     for (size_t i = 0; i < alternatives.size(); ++i) {
         bool nullable1 = false;
         auto first1 = computeFirstForTree(alternatives[i], firstSets, nullable1);
@@ -420,14 +387,12 @@ bool FirstFollow::checkLL1ForNT(
             bool nullable2 = false;
             auto first2 = computeFirstForTree(alternatives[j], firstSets, nullable2);
             
-            // Проверяем пересечение FIRST
             for (int term : first1) {
                 if (first2.count(term) > 0) {
                     return false;
                 }
             }
             
-            // Проверяем FIRST vs FOLLOW
             if (nullable1 && followSets.count(nt->name()) > 0) {
                 const auto& follow = followSets.at(nt->name());
                 for (int term : first2) {

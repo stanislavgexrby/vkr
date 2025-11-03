@@ -23,20 +23,17 @@ protected:
 };
 
 TEST_F(CreatorTest, CreateEmptyDiagram) {
-    // Простейшее дерево - один терминал
     int termId = grammar->addTerminal("begin");
     auto tree = std::make_unique<RETerminal>(grammar.get(), termId);
     
     Creator::createDrawObjects(list.get(), tree.get());
     
-    // Должны быть First, Terminal, Last
-    EXPECT_GE(list->count(), 2); // Минимум First и Last
+    EXPECT_GE(list->count(), 2);
     EXPECT_GT(list->width(), 0);
     EXPECT_GT(list->height(), 0);
 }
 
 TEST_F(CreatorTest, CreateSequence) {
-    // Последовательность: begin , end
     int id1 = grammar->addTerminal("begin");
     int id2 = grammar->addTerminal("end");
     
@@ -46,12 +43,11 @@ TEST_F(CreatorTest, CreateSequence) {
     
     Creator::createDrawObjects(list.get(), seq.get());
     
-    EXPECT_GE(list->count(), 2); // First и Last минимум
-    EXPECT_GT(list->width(), 40); // Минимальная ширина для двух элементов
+    EXPECT_GE(list->count(), 2);
+    EXPECT_GT(list->width(), 40);
 }
 
 TEST_F(CreatorTest, CreateAlternative) {
-    // Альтернатива: begin ; end
     int id1 = grammar->addTerminal("begin");
     int id2 = grammar->addTerminal("end");
     
@@ -63,7 +59,6 @@ TEST_F(CreatorTest, CreateAlternative) {
     
     EXPECT_GE(list->count(), 2);
     EXPECT_GT(list->width(), 0);
-    // Альтернатива может иметь большую высоту (идет вниз)
 }
 
 TEST_F(CreatorTest, DiagramSizePositive) {
@@ -72,13 +67,11 @@ TEST_F(CreatorTest, DiagramSizePositive) {
     
     Creator::createDrawObjects(list.get(), tree.get());
     
-    // Проверка что размеры положительные
     EXPECT_GT(list->width(), 0);
     EXPECT_GT(list->height(), 0);
 }
 
 TEST_F(CreatorTest, MultipleCreations) {
-    // Создание диаграммы несколько раз - должно очищать предыдущее
     int termId = grammar->addTerminal("test");
     auto tree = std::make_unique<RETerminal>(grammar.get(), termId);
     
@@ -88,16 +81,15 @@ TEST_F(CreatorTest, MultipleCreations) {
     Creator::createDrawObjects(list.get(), tree.get());
     int count2 = list->count();
     
-    EXPECT_EQ(count1, count2); // Должно быть одинаково
+    EXPECT_EQ(count1, count2);
 }
 
 TEST_F(CreatorTest, NullPointerHandling) {
     int termId = grammar->addTerminal("test");
     auto tree = std::make_unique<RETerminal>(grammar.get(), termId);
     
-    // Не должно падать с nullptr
     Creator::createDrawObjects(nullptr, tree.get());
     Creator::createDrawObjects(list.get(), nullptr);
     
-    EXPECT_EQ(list->count(), 0); // Список должен остаться пустым
+    EXPECT_EQ(list->count(), 0);
 }

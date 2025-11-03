@@ -34,7 +34,6 @@ private:
     std::unique_ptr<RETree> parseF();    // Factor (итерации с *)
     std::unique_ptr<RETree> parseU();    // Unary (терминалы, нетерминалы)
     
-    // Вспомогательные функции из Parser (используем те же)
     void skipSpaces();
     void skipNotMatter();
     void skipToChar(char ch);

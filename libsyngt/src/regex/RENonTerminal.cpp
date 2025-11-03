@@ -39,10 +39,8 @@ NTListItem* RENonTerminal::getListItem() const {
         return nullptr;
     }
     
-    // Получаем имя нетерминала по ID
     std::string ntName = m_grammar->nonTerminals()->getString(m_id);
     
-    // Получаем NTListItem из грамматики
     return m_grammar->getNTItem(ntName);
 }
 

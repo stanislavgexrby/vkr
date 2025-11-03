@@ -122,7 +122,6 @@ TEST(SemanticArrowTest, Copy) {
     
     ASSERT_NE(copied, nullptr);
     
-    // Проверяем, что это SemanticArrow
     SemanticArrow* semCopied = dynamic_cast<SemanticArrow*>(copied.get());
     ASSERT_NE(semCopied, nullptr);
     
@@ -154,7 +153,6 @@ TEST(SemanticArrowTest, Save) {
     EXPECT_EQ(result, &point);
     
     std::string output = buffer.str();
-    // ctSemanticArrow=1, cwFORWARD=1, затем semantics save (2\n5\n10\n)
     EXPECT_EQ(output, "1\n1\n2\n5\n10\n");
 }
 

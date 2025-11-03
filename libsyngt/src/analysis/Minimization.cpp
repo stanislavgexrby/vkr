@@ -9,7 +9,6 @@ namespace syngt {
 State MinimizationTable::createState() {
     State newState = m_nextState++;
     
-    // Генерируем имя состояния
     std::ostringstream oss;
     oss << "State" << newState;
     m_stateNames[newState] = oss.str();
@@ -18,10 +17,8 @@ State MinimizationTable::createState() {
 }
 
 void MinimizationTable::linkStates(State from, State to, const std::string& symbol) {
-    // Добавляем символ в алфавит
     findOrAddSymbol(symbol);
     
-    // Создаем или получаем набор состояний для перехода
     auto key = std::make_pair(from, symbol);
     auto it = m_table.find(key);
     
@@ -33,14 +30,12 @@ void MinimizationTable::linkStates(State from, State to, const std::string& symb
 }
 
 int MinimizationTable::findOrAddSymbol(const std::string& symbol) {
-    // Ищем символ
     auto it = std::find(m_symbols.begin(), m_symbols.end(), symbol);
     
     if (it != m_symbols.end()) {
         return static_cast<int>(std::distance(m_symbols.begin(), it));
     }
     
-    // Добавляем новый символ
     m_symbols.push_back(symbol);
     return static_cast<int>(m_symbols.size() - 1);
 }
@@ -77,7 +72,6 @@ const std::string& MinimizationTable::getStateName(State state) const {
         return it->second;
     }
     
-    // Стандартные имена
     if (state == StartState) {
         static const std::string start = "StartState";
         return start;
@@ -128,14 +122,13 @@ void MinimizationTable::writeToFile(const std::string& filename) const {
 std::string MinimizationTable::toString() const {
     std::ostringstream oss;
     
-    // Заголовок с символами
     oss << std::setw(10) << "";
     for (const auto& symbol : m_symbols) {
         std::string displaySymbol = symbol;
         if (symbol.empty()) {
             displaySymbol = "ε"; // epsilon
         } else if (symbol.size() > 0 && symbol[0] == '\'') {
-            displaySymbol = symbol; // Уже в кавычках
+            displaySymbol = symbol;
         } else {
             displaySymbol = "'" + symbol + "'";
         }
@@ -143,18 +136,15 @@ std::string MinimizationTable::toString() const {
     }
     oss << "\n";
     
-    // Строки для каждого состояния
     for (State state = 0; state < m_nextState; ++state) {
         std::string stateName = getStateName(state);
         
-        // Специальное обозначение для FinalState
         if (state == FinalState) {
-            stateName = "X"; // Конечное состояние
+            stateName = "X";
         }
         
         oss << std::setw(10) << stateName;
         
-        // Переходы по каждому символу
         for (size_t symIdx = 0; symIdx < m_symbols.size(); ++symIdx) {
             const StatesSet* statesSet = getTableElement(state, static_cast<int>(symIdx));
             

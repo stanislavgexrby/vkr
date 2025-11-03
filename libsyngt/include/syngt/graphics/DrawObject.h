@@ -309,22 +309,16 @@ public:
     explicit DrawObjectList(Grammar* grammar);
     ~DrawObjectList() = default;
     
-    //Инициализировать с First и Last объектами
     void initialize();
     
-    //Добавить объект
     void add(std::unique_ptr<DrawObject> obj);
     
-    //Удалить все кроме первого
     void clearExceptFirst();
     
-    //Очистить полностью
     void clear();
     
-    //Количество объектов
     int count() const { return static_cast<int>(m_items.size()); }
     
-    //Получить объект по индексу
     DrawObject* operator[](int index) const {
         if (index >= 0 && index < count()) {
             return m_items[index].get();
@@ -332,10 +326,8 @@ public:
         return nullptr;
     }
     
-    //Найти индекс объекта
     int indexOf(const DrawObject* obj) const;
     
-    //Найти объект по координатам
     DrawObject* findDO(int x, int y) const;
     
     /**
@@ -368,7 +360,6 @@ public:
      */
     void addExtendedPoint();
     
-    // Getters/Setters
     int height() const { return m_height; }
     void setHeight(int h) { m_height = h; }
     

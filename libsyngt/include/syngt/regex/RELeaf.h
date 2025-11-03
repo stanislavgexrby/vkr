@@ -54,7 +54,7 @@ public:
     void setNameID(const std::string& name) { setNameFromID(name); }
 
     int getOperationCount() const override {
-        return 1;  // Листья считаются как одна операция
+        return 1;
     }
 
 };

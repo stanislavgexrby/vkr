@@ -30,7 +30,6 @@ private:
     std::unique_ptr<RETree> parseU();    // Unary (с * +)
     std::unique_ptr<RETree> parseK();    // Constant (терминалы, нетерминалы, скобки)
     
-    // Вспомогательные функции
     void skipSpaces();
     void skipNotMatter();
     void skipToChar(char ch);

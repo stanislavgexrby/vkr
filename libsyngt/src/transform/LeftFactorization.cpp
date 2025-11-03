@@ -30,7 +30,6 @@ void LeftFactorization::factorizeAll(Grammar* grammar) {
 void LeftFactorization::factorize(NTListItem* nt, Grammar* grammar) {
     if (!nt || !grammar) return;
     
-    // Повторяем факторизацию пока есть изменения
     const int maxIterations = 10;
     
     for (int iteration = 0; iteration < maxIterations; ++iteration) {
@@ -39,7 +38,6 @@ void LeftFactorization::factorize(NTListItem* nt, Grammar* grammar) {
             return;
         }
         
-        // Собираем все альтернативы
         std::vector<const RETree*> alternatives;
         collectAlternatives(root, alternatives);
         
@@ -51,7 +49,6 @@ void LeftFactorization::factorize(NTListItem* nt, Grammar* grammar) {
             return;
         }
         
-        // Группировка
         auto groups = groupByPrefix(alternatives);
         
         if (groups.size() == alternatives.size()) {
@@ -81,7 +78,6 @@ void LeftFactorization::collectAlternatives(
     }
 }
 
-// Развернуть And-цепочку в плоский список
 static void flattenAndChain(const RETree* root, std::vector<const RETree*>& result) {
     if (auto andNode = dynamic_cast<const REAnd*>(root)) {
         flattenAndChain(andNode->left(), result);
@@ -91,7 +87,6 @@ static void flattenAndChain(const RETree* root, std::vector<const RETree*>& resu
     }
 }
 
-// Собрать список обратно в And-цепочку
 static std::unique_ptr<RETree> buildAndChain(const std::vector<const RETree*>& list, size_t start, size_t end) {
     if (start >= end) return nullptr;
     if (start + 1 == end) return list[start]->copy();
@@ -109,12 +104,10 @@ std::unique_ptr<RETree> LeftFactorization::findCommonPrefix(
 ) {
     if (!tree1 || !tree2) return nullptr;
     
-    // Развернуть обе в списки
     std::vector<const RETree*> list1, list2;
     flattenAndChain(tree1, list1);
     flattenAndChain(tree2, list2);
     
-    // Найти наибольший общий префикс
     size_t commonLen = 0;
     while (commonLen < list1.size() && commonLen < list2.size() &&
            treesEqual(list1[commonLen], list2[commonLen])) {
@@ -123,7 +116,6 @@ std::unique_ptr<RETree> LeftFactorization::findCommonPrefix(
     
     if (commonLen == 0) return nullptr;
     
-    // Собрать обратно
     return buildAndChain(list1, 0, commonLen);
 }
 
@@ -144,11 +136,6 @@ bool LeftFactorization::hasCommonPrefixes(
 std::vector<std::vector<const RETree*>> LeftFactorization::groupByPrefix(
     const std::vector<const RETree*>& alternatives
 ) {
-    // НОВЫЙ АЛГОРИТМ:
-    // 1. Находим все пары с общими префиксами
-    // 2. Группируем пары по одинаковому префиксу
-    // 3. Объединяем пересекающиеся группы
-    
     std::map<std::string, std::vector<const RETree*>> prefixMap;
     std::set<const RETree*> processed;
     
@@ -161,7 +148,6 @@ std::vector<std::vector<const RETree*>> LeftFactorization::groupByPrefix(
                 
                 auto& group = prefixMap[prefixStr];
                 
-                // Добавляем обе альтернативы, если их ещё нет
                 if (std::find(group.begin(), group.end(), alternatives[i]) == group.end()) {
                     group.push_back(alternatives[i]);
                 }
@@ -175,18 +161,14 @@ std::vector<std::vector<const RETree*>> LeftFactorization::groupByPrefix(
         }
     }
     
-    // Формируем итоговые группы
     std::vector<std::vector<const RETree*>> groups;
     
-    // Сначала добавляем группы с общими префиксами
     for (auto& [prefixStr, group] : prefixMap) {
-        // Проверяем, что все элементы группы действительно имеют этот префикс
         if (group.size() > 1) {
             groups.push_back(std::move(group));
         }
     }
     
-    // Затем добавляем одиночные альтернативы
     for (const auto* alt : alternatives) {
         if (processed.find(alt) == processed.end()) {
             groups.push_back({alt});
@@ -206,7 +188,6 @@ std::unique_ptr<RETree> LeftFactorization::buildFactorizedRule(
     
     for (const auto& group : groups) {
         if (group.size() == 1) {
-            // Одиночная альтернатива - просто копируем
             auto alt = group[0]->copy();
             
             if (!result) {
@@ -215,22 +196,16 @@ std::unique_ptr<RETree> LeftFactorization::buildFactorizedRule(
                 result = REOr::make(std::move(result), std::move(alt));
             }
         } else if (group.size() > 1) {
-            // Группа с общим префиксом - факторизуем
-            
-            // Находим общий префикс между первыми двумя элементами группы
             auto prefix = findCommonPrefix(group[0], group[1]);
             if (!prefix) continue;
             
-            // Создаем новый нетерминал для суффиксов
             std::string newName = "factored_" + std::to_string(grammar->getNonTerminals().size());
             grammar->addNonTerminal(newName);
             
-            // Строим правило для нового нетерминала (суффиксы)
             std::unique_ptr<RETree> suffixRule;
             for (const auto* tree : group) {
                 auto suffix = removePrefix(tree, prefix.get());
                 if (!suffix) {
-                    // Если суффикс пустой - добавляем epsilon
                     int epsilonId = grammar->addSemantic("@");
                     suffix = std::make_unique<RESemantic>(grammar, epsilonId);
                 }
@@ -242,18 +217,10 @@ std::unique_ptr<RETree> LeftFactorization::buildFactorizedRule(
                 }
             }
             
-            // Сохраняем правило для нового нетерминала
             if (suffixRule) {
                 grammar->setNTRoot(newName, std::move(suffixRule));
             }
             
-            // // Рекурсивно факторизуем новый нетерминал
-            // NTListItem* newNT = grammar->getNTItem(newName);
-            // if (newNT) {
-            //     factorize(newNT, grammar);
-            // }
-            
-            // Строим префикс + новый нетерминал
             int newNTId = grammar->findNonTerminal(newName);
             auto newNTNode = std::make_unique<RENonTerminal>(grammar, newNTId, false);
             auto factored = REAnd::make(std::move(prefix), std::move(newNTNode));
@@ -275,26 +242,22 @@ std::unique_ptr<RETree> LeftFactorization::removePrefix(
 ) {
     if (!tree || !prefix) return nullptr;
     
-    // Развернуть оба в списки
     std::vector<const RETree*> treeList, prefixList;
     flattenAndChain(tree, treeList);
     flattenAndChain(prefix, prefixList);
     
-    // Проверяем что prefix действительно префикс
     if (prefixList.size() > treeList.size()) return tree->copy();
     
     for (size_t i = 0; i < prefixList.size(); ++i) {
         if (!treesEqual(treeList[i], prefixList[i])) {
-            return tree->copy();  // Не префикс
+            return tree->copy();
         }
     }
     
-    // Если префикс == всё дерево, возвращаем nullptr (пустой суффикс)
     if (prefixList.size() == treeList.size()) {
         return nullptr;
     }
     
-    // Собираем суффикс
     return buildAndChain(treeList, prefixList.size(), treeList.size());
 }
 

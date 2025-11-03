@@ -15,7 +15,6 @@
 
 namespace syngt {
 
-// Вспомогательная функция: проверка nullable
 static bool isAlternativeNullable(
     const RETree* tree,
     const std::map<std::string, bool>& nullable
@@ -51,7 +50,6 @@ static bool isAlternativeNullable(
     return false;
 }
 
-// Вспомогательная функция: вычисление FIRST для дерева
 static std::set<int> computeFirstForAlternative(
     const RETree* tree,
     const std::map<std::string, std::set<int>>& firstSets,
@@ -115,11 +113,9 @@ std::unique_ptr<ParsingTable> ParsingTable::build(Grammar* grammar) {
     auto table = std::unique_ptr<ParsingTable>(new ParsingTable());
     table->m_grammar = grammar;
     
-    // Вычисляем FIRST/FOLLOW множества
     auto firstSets = FirstFollow::computeFirst(grammar);
     auto followSets = FirstFollow::computeFollow(grammar, firstSets);
     
-    // Вычисляем nullable для всех нетерминалов
     std::map<std::string, bool> nullable;
     auto nts = grammar->getNonTerminals();
     
@@ -143,13 +139,10 @@ std::unique_ptr<ParsingTable> ParsingTable::build(Grammar* grammar) {
         }
     }
     
-    // Заполняем таблицу разбора
-    // Для каждого нетерминала A
     for (const auto& ntName : nts) {
         NTListItem* nt = grammar->getNTItem(ntName);
         if (!nt || !nt->hasRoot()) continue;
         
-        // Собираем все альтернативы A → α₁ | α₂ | ...
         std::vector<const RETree*> alternatives;
         std::function<void(const RETree*)> collectAlts = [&](const RETree* tree) {
             if (!tree) return;
@@ -162,7 +155,6 @@ std::unique_ptr<ParsingTable> ParsingTable::build(Grammar* grammar) {
         };
         collectAlts(nt->root());
         
-        // Обрабатываем каждую альтернативу
         for (const auto* alt : alternatives) {
             table->processAlternative(ntName, alt, firstSets, followSets, nullable);
         }
@@ -178,15 +170,12 @@ void ParsingTable::processAlternative(
     const std::map<std::string, std::set<int>>& followSets,
     const std::map<std::string, bool>& nullable
 ) {
-    // Вычисляем FIRST(α) для альтернативы
     auto firstAlpha = computeFirstForAlternative(alternative, firstSets, nullable);
     
-    // Для каждого терминала a ∈ FIRST(α): M[A, a] = A → α
     for (int termId : firstAlpha) {
         addRule(ntName, termId, alternative);
     }
     
-    // Если α nullable, то для каждого b ∈ FOLLOW(A): M[A, b] = A → α
     if (isAlternativeNullable(alternative, nullable)) {
         auto followIt = followSets.find(ntName);
         if (followIt != followSets.end()) {
@@ -204,7 +193,6 @@ void ParsingTable::addRule(
 ) {
     TableKey key = {nonTerminal, terminal};
     
-    // Проверка на конфликт
     if (m_table.count(key) > 0 && m_table[key] != rule) {
         std::string conflict = "Conflict at M[" + nonTerminal + ", ";
         if (terminal == -1) {
@@ -238,7 +226,6 @@ void ParsingTable::print(Grammar* grammar) const {
     
     std::cout << "\n=== LL(1) Parsing Table ===\n\n";
     
-    // Заголовок (терминалы)
     std::cout << std::setw(12) << " ";
     for (int t = 0; t < termCount; ++t) {
         std::cout << std::setw(15) << grammar->terminals()->getString(t);
@@ -246,11 +233,9 @@ void ParsingTable::print(Grammar* grammar) const {
     std::cout << std::setw(15) << "$" << "\n";
     std::cout << std::string(12 + (termCount + 1) * 15, '-') << "\n";
     
-    // Строки (нетерминалы)
     for (const auto& nt : nts) {
         std::cout << std::setw(12) << nt;
         
-        // Для каждого терминала
         for (int t = 0; t < termCount; ++t) {
             const RETree* rule = getRule(nt, t);
             if (rule) {
@@ -281,7 +266,6 @@ void ParsingTable::print(Grammar* grammar) const {
         std::cout << "\n";
     }
     
-    // Выводим конфликты если есть
     if (hasConflicts()) {
         std::cout << "\n=== CONFLICTS ===\n";
         for (const auto& conflict : m_conflicts) {

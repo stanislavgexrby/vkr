@@ -35,13 +35,11 @@ TEST_F(LeftFactorizationTest, NoCommonPrefix) {
     
     LeftFactorization::factorize(s, grammar.get());
     
-    // Не должно измениться (нет общих префиксов)
     EXPECT_EQ(grammar->getNonTerminals().size(), beforeCount);
 }
 
 TEST_F(LeftFactorizationTest, FactorizeSimple) {
     // S → 'a' 'b' | 'a' 'c'
-    // Должно стать: S → 'a' S', S' → 'b' | 'c'
     grammar->addNonTerminal("S");
     grammar->setNTRule("S", "'a' , 'b' ; 'a' , 'c'.");
     
@@ -49,7 +47,6 @@ TEST_F(LeftFactorizationTest, FactorizeSimple) {
     
     LeftFactorization::factorize(grammar->getNTItem("S"), grammar.get());
     
-    // Должен добавиться новый нетерминал
     EXPECT_GT(grammar->getNonTerminals().size(), beforeCount);
 }
 
@@ -66,7 +63,6 @@ TEST_F(LeftFactorizationTest, FactorizeMultiple) {
 }
 
 TEST_F(LeftFactorizationTest, FactorizeAllGrammar) {
-    // Создаем грамматику с несколькими правилами, требующими факторизации
     grammar->addNonTerminal("A");
     grammar->addNonTerminal("B");
     
@@ -77,7 +73,6 @@ TEST_F(LeftFactorizationTest, FactorizeAllGrammar) {
     
     LeftFactorization::factorizeAll(grammar.get());
     
-    // Должны добавиться новые нетерминалы для факторизованных правил
     EXPECT_GT(grammar->getNonTerminals().size(), beforeCount);
 }
 
@@ -100,7 +95,6 @@ TEST_F(LeftFactorizationTest, SaveAfterFactorization) {
 
 TEST_F(LeftFactorizationTest, RecursiveFactorization) {
     // S → 'a' 'b' 'c' | 'a' 'b' 'd' | 'a' 'x'
-    // Должна быть многоуровневая факторизация
     
     grammar->addNonTerminal("S");
     grammar->setNTRule("S", "'a' , 'b' , 'c' ; 'a' , 'b' , 'd' ; 'a' , 'x'.");
@@ -113,22 +107,16 @@ TEST_F(LeftFactorizationTest, RecursiveFactorization) {
     size_t afterCount = grammar->getNonTerminals().size();
     std::cout << "After: " << afterCount << " NTs\n";
     
-    // После факторизации правила "S → abc | abd | ax"
-    // должно быть создано хотя бы 1 новый нетерминал (для факторизации)
-    // Рекурсивная факторизация может создать еще больше
     EXPECT_GT(afterCount, beforeCount);  // Хотя бы 1 новый
     
-    // Проверяем что S имеет правило
     NTListItem* s = grammar->getNTItem("S");
     ASSERT_NE(s, nullptr);
     EXPECT_TRUE(s->hasRoot());
     
-    // Выводим итоговое правило для отладки
     std::cout << "Final S rule: " << s->value() << "\n";
 }
 
 TEST_F(LeftFactorizationTest, DeepRecursion) {
-    // Тестируем глубокую вложенность общих префиксов
     // S → 'a' 'b' 'c' 'd' | 'a' 'b' 'c' 'e' | 'a' 'b' 'f'
     
     grammar->addNonTerminal("S");
@@ -138,20 +126,16 @@ TEST_F(LeftFactorizationTest, DeepRecursion) {
     
     LeftFactorization::factorize(grammar->getNTItem("S"), grammar.get());
     
-    // Должно создаться несколько уровней факторизованных нетерминалов
     size_t afterCount = grammar->getNonTerminals().size();
     EXPECT_GT(afterCount, beforeCount);
     
-    // Проверяем что факторизация завершилась без ошибок
     NTListItem* s = grammar->getNTItem("S");
     EXPECT_TRUE(s->hasRoot());
 }
 
 TEST_F(LeftFactorizationTest, NoInfiniteLoop) {
-    // Проверяем что нет бесконечного цикла на сложных случаях
     grammar->addNonTerminal("A");
     grammar->setNTRule("A", "'x','y','z' ; 'x','y','w' ; 'p','q'.");
     
-    // Должно завершиться без зависания
     EXPECT_NO_THROW(LeftFactorization::factorize(grammar->getNTItem("A"), grammar.get()));
 }

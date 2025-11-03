@@ -23,7 +23,6 @@ std::unique_ptr<RETree> Parser::parseFromProducer(CharProducer* producer, Gramma
     skipSpaces();
     auto result = parseE();
     
-    // Ожидаем точку в конце
     skipSpaces();
     if (m_producer->currentChar() == '.') {
         m_producer->next();
@@ -32,7 +31,7 @@ std::unique_ptr<RETree> Parser::parseFromProducer(CharProducer* producer, Gramma
     return result;
 }
 
-// E = T [';' T]*  (альтернативы)
+// E = T [';' T]*
 std::unique_ptr<RETree> Parser::parseE() {
     auto left = parseT();
     
@@ -50,7 +49,7 @@ std::unique_ptr<RETree> Parser::parseE() {
     return left;
 }
 
-// T = F [',' F]*  (последовательности)
+// T = F [',' F]*
 std::unique_ptr<RETree> Parser::parseT() {
     auto left = parseF();
     
@@ -78,7 +77,6 @@ std::unique_ptr<RETree> Parser::parseF() {
         skipSpaces();
         
         auto right = parseU();
-        // # оператор - создаем итерацию
         left = REIteration::make(std::move(left), std::move(right));
         
         skipSpaces();
@@ -87,27 +85,23 @@ std::unique_ptr<RETree> Parser::parseF() {
     return left;
 }
 
-// U = K ['*' | '+' ]*  (итерации)
-// * и + это ПОСТФИКСНЫЕ операторы
+// U = K ['*' | '+' ]*
 std::unique_ptr<RETree> Parser::parseU() {
     auto left = parseK();
     
     skipSpaces();
     char ch = m_producer->currentChar();
     
-    // Обработка постфиксных * и +
     while (ch == '*' || ch == '+') {
-        char op = ch;  // Сохраняем оператор
+        char op = ch;
         m_producer->next();
         skipSpaces();
         
-        // Проверяем на *@ или +@
         if (m_producer->currentChar() == '@' || m_producer->currentChar() == '&') {
             m_producer->next();
             skipSpaces();
         }
         
-        // Создаем итерацию
         auto epsilon = std::make_unique<RETerminal>(m_grammar, 0);
         
         if (op == '*') {
@@ -130,7 +124,6 @@ std::unique_ptr<RETree> Parser::parseK() {
     skipSpaces();
     char ch = m_producer->currentChar();
     
-    // Скобки: ( E )
     if (ch == '(') {
         m_producer->next();
         auto expr = parseE();
@@ -141,7 +134,6 @@ std::unique_ptr<RETree> Parser::parseK() {
         return expr;
     }
     
-    // Квадратные скобки: [ E ] = Or(E, epsilon)
     if (ch == '[') {
         m_producer->next();
         auto expr = parseE();
@@ -151,12 +143,10 @@ std::unique_ptr<RETree> Parser::parseK() {
         }
         skipSpaces();
         
-        // [E] = E ; epsilon (опциональность)
         auto epsilon = std::make_unique<RETerminal>(m_grammar, 0);
         return REOr::make(std::move(expr), std::move(epsilon));
     }
     
-    // Терминал в кавычках: 'text' или "text"
     if (ch == '\'' || ch == '"') {
         m_producer->next();
         std::string name = readName(ch);
@@ -166,18 +156,15 @@ std::unique_ptr<RETree> Parser::parseK() {
         return std::make_unique<RETerminal>(m_grammar, id);
     }
     
-    // @ или @* или @ID
     if (ch == '@' || ch == '&') {
         m_producer->next();
         skipSpaces();
         
-        // Проверяем @* или @+
         char nextCh = m_producer->currentChar();
         if (nextCh == '*' || nextCh == '+') {
             m_producer->next();
             skipSpaces();
             
-            // Парсим следующий элемент K (обычно скобки)
             auto inner = parseK();
             
             // @* → Iteration(epsilon, K)
@@ -191,11 +178,9 @@ std::unique_ptr<RETree> Parser::parseK() {
             }
         }
         
-        // Просто @ или &  → epsilon терминал (ID=0)
         return std::make_unique<RETerminal>(m_grammar, 0);
     }
     
-    // Семантика: $ID
     if (ch == '$') {
         m_producer->next();
         std::string name = "$" + readIdentifier();
@@ -203,18 +188,15 @@ std::unique_ptr<RETree> Parser::parseK() {
         return std::make_unique<RESemantic>(m_grammar, id);
     }
     
-    // Нетерминал или специальный терминал
     if (isLetterOrDigit(ch)) {
         std::string name = readIdentifier();
         
-        // Специальные терминалы
         if (name == "LETTER" || name == "DIGIT" || name == "ID" || 
             name == "chars" || name == "digit" || name == "digits") {
             int id = m_grammar->addTerminal(name);
             return std::make_unique<RETerminal>(m_grammar, id);
         }
         
-        // Нетерминал
         int id = m_grammar->addNonTerminal(name);
         return std::make_unique<RENonTerminal>(m_grammar, id, false);
     }
@@ -245,7 +227,6 @@ void Parser::skipNotMatter() {
 void Parser::skipSpaces() {
     skipNotMatter();
     
-    // Пропуск комментариев {comment} или //comment
     while (m_producer->currentChar() == '{' || m_producer->currentChar() == '/') {
         if (m_producer->currentChar() == '{') {
             skipToChar('}');

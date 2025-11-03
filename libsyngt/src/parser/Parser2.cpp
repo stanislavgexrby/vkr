@@ -23,7 +23,6 @@ std::unique_ptr<RETree> Parser2::parseFromProducer(CharProducer* producer, Gramm
     skipSpaces();
     auto result = parseE();
     
-    // Ожидаем точку в конце
     skipSpaces();
     if (m_producer->currentChar() == '.') {
         m_producer->next();
@@ -34,7 +33,7 @@ std::unique_ptr<RETree> Parser2::parseFromProducer(CharProducer* producer, Gramm
     return result;
 }
 
-// E = T [';' T]*  (альтернативы)
+// E = T [';' T]*
 std::unique_ptr<RETree> Parser2::parseE() {
     auto left = parseT();
     
@@ -52,7 +51,7 @@ std::unique_ptr<RETree> Parser2::parseE() {
     return left;
 }
 
-// T = F [',' F]*  (последовательности)
+// T = F [',' F]*
 std::unique_ptr<RETree> Parser2::parseT() {
     auto left = parseF();
     
@@ -70,8 +69,7 @@ std::unique_ptr<RETree> Parser2::parseT() {
     return left;
 }
 
-// F = U ['*' U]*  (итерации)
-// ВАЖНО: В Parser2 используется '*' а не '#' как в Parser!
+// F = U ['*' U]*
 std::unique_ptr<RETree> Parser2::parseF() {
     auto left = parseU();
     
@@ -94,7 +92,7 @@ std::unique_ptr<RETree> Parser2::parseU() {
     skipSpaces();
     char ch = m_producer->currentChar();
     
-    // Скобки: ( E )
+    // ( E )
     if (ch == '(') {
         m_producer->next();
         auto expr = parseE();
@@ -109,7 +107,6 @@ std::unique_ptr<RETree> Parser2::parseU() {
         return expr;
     }
     
-    // Опциональность: [ E ] → (epsilon ; E)
     if (ch == '[') {
         m_producer->next();
         auto expr = parseE();
@@ -126,7 +123,6 @@ std::unique_ptr<RETree> Parser2::parseU() {
         return REOr::make(std::move(epsilon), std::move(expr));
     }
     
-    // Терминалы: 'text' или "text"
     if (ch == '\'' || ch == '"') {
         char quote = ch;
         m_producer->next();
@@ -143,14 +139,13 @@ std::unique_ptr<RETree> Parser2::parseU() {
         return std::make_unique<RETerminal>(m_grammar, id);
     }
     
-    // Epsilon: @ или &
+    // Epsilon
     if (ch == '@' || ch == '&') {
         m_producer->next();
         skipSpaces();
         return std::make_unique<RETerminal>(m_grammar, 0); // Epsilon = ID 0
     }
     
-    // Семантика: $identifier
     if (ch == '$') {
         m_producer->next();
         std::string name = "$" + readIdentifier();
@@ -163,7 +158,6 @@ std::unique_ptr<RETree> Parser2::parseU() {
         return std::make_unique<RESemantic>(m_grammar, id);
     }
     
-    // Нетерминал: identifier
     if (std::isalpha(static_cast<unsigned char>(ch)) || ch == '_') {
         std::string name = readIdentifier();
         
@@ -178,7 +172,6 @@ std::unique_ptr<RETree> Parser2::parseU() {
     throw std::runtime_error(std::string("Unexpected character: ") + ch);
 }
 
-// Вспомогательные функции (копии из Parser.cpp)
 void Parser2::skipNotMatter() {
     char ch = m_producer->currentChar();
     
@@ -198,7 +191,6 @@ void Parser2::skipNotMatter() {
 void Parser2::skipSpaces() {
     skipNotMatter();
     
-    // Пропуск комментариев {comment} или //comment
     while (m_producer->currentChar() == '{' || m_producer->currentChar() == '/') {
         if (m_producer->currentChar() == '{') {
             skipToChar('}');

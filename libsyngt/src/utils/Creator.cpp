@@ -11,7 +11,6 @@ namespace Creator {
 
 using namespace syngt::graphics;
 
-// Вспомогательный класс для доступа к protected методам
 // (временное решение до рефакторинга DrawObject)
 class DrawObjectLastHelper : public DrawObjectLast {
 public:
@@ -28,30 +27,23 @@ void createDrawObjects(
         return;
     }
     
-    // Очистить список
     list->clear();
     
-    // Создать первый объект (начало диаграммы)
     auto firstDO = std::make_unique<DrawObjectFirst>();
     firstDO->place();
     
     DrawObjectFirst* firstPtr = firstDO.get();
     list->add(std::move(firstDO));
     
-    // Семантики и высота
     SemanticIDList* semantics = nullptr;
     int height = 0;
     
-    // ========== ВОТ ЗДЕСЬ ВЫЗЫВАЕМ МЕТОД ДЕРЕВА ==========
     DrawObject* prevDO = const_cast<RETree*>(tree)->drawObjectsToRight(
         list, semantics, firstPtr, cwFORWARD, height
     );
-    // =====================================================
     
-    // Создать последний объект
     auto lastDO = std::make_unique<DrawObjectLast>();
     
-    // Создать входящую стрелку
     std::unique_ptr<Arrow> inArrow;
     if (semantics == nullptr) {
         inArrow = std::make_unique<Arrow>(cwFORWARD, prevDO);
@@ -62,7 +54,6 @@ void createDrawObjects(
     
     lastDO->setInArrow(std::move(inArrow));
     
-    // Установить позицию последнего объекта
     int lastX = prevDO->endX() + lastDO->inArrow()->getLength();
     int lastY = prevDO->y();
     lastDO->setPositionForCreator(lastX, lastY);
@@ -70,7 +61,6 @@ void createDrawObjects(
     DrawObjectLast* lastPtr = lastDO.get();
     list->add(std::move(lastDO));
     
-    // Установить размеры списка
     list->setWidth(lastPtr->endX() + HorizontalSkipFromBorder);
     list->setHeight(height + firstPtr->y() + VerticalSkipFromBorder + NS_Radius);
 }

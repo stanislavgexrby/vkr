@@ -43,13 +43,13 @@ TEST(SemanticIDListTest, GetLength) {
     EXPECT_EQ(list.getLength(), 0);
     
     list.add(1);
-    EXPECT_EQ(list.getLength(), 20); // 1 элемент * 20
+    EXPECT_EQ(list.getLength(), 20);
     
     list.add(2);
-    EXPECT_EQ(list.getLength(), 40); // 2 элемента * 20
+    EXPECT_EQ(list.getLength(), 40);
     
     list.add(3);
-    EXPECT_EQ(list.getLength(), 60); // 3 элемента * 20
+    EXPECT_EQ(list.getLength(), 60);
 }
 
 TEST(SemanticIDListTest, Copy) {
@@ -66,7 +66,6 @@ TEST(SemanticIDListTest, Copy) {
     EXPECT_EQ(copied->getID(1), 20);
     EXPECT_EQ(copied->getID(2), 30);
     
-    // Проверяем независимость копии
     list.add(40);
     EXPECT_EQ(list.count(), 4);
     EXPECT_EQ(copied->count(), 3);
@@ -92,25 +91,22 @@ TEST(SemanticIDListTest, SaveLoad) {
     list.add(200);
     list.add(300);
     
-    // Перенаправляем std::cout и std::cin через stringstream
     std::stringstream buffer;
     std::streambuf* oldCout = std::cout.rdbuf(buffer.rdbuf());
     
     list.save();
     
-    std::cout.rdbuf(oldCout); // Восстанавливаем cout
+    std::cout.rdbuf(oldCout);
     
-    // Проверяем формат сохранения
     std::string output = buffer.str();
     EXPECT_EQ(output, "3\n100\n200\n300\n");
     
-    // Теперь тестируем загрузку
     SemanticIDList list2;
     std::streambuf* oldCin = std::cin.rdbuf(buffer.rdbuf());
     
     list2.load();
     
-    std::cin.rdbuf(oldCin); // Восстанавливаем cin
+    std::cin.rdbuf(oldCin);
     
     EXPECT_EQ(list2.count(), 3);
     EXPECT_EQ(list2.getID(0), 100);
@@ -126,7 +122,7 @@ TEST(SemanticIDListTest, MultipleAdds) {
     }
     
     EXPECT_EQ(list.count(), 10);
-    EXPECT_EQ(list.getLength(), 200); // 10 элементов * 20
+    EXPECT_EQ(list.getLength(), 200);
     
     for (int i = 0; i < 10; ++i) {
         EXPECT_EQ(list.getID(i), i * 10);

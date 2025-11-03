@@ -40,7 +40,6 @@ TEST_F(ParsingTableTest, BuildWithAlternatives) {
 }
 
 TEST_F(ParsingTableTest, NoConflictsLL1Grammar) {
-    // LL(1) грамматика
     // S → 'a' A | 'b' B
     // A → 'c'
     // B → 'd'
@@ -59,7 +58,6 @@ TEST_F(ParsingTableTest, NoConflictsLL1Grammar) {
 }
 
 TEST_F(ParsingTableTest, DetectConflicts) {
-    // Не LL(1): обе альтернативы начинаются с 'a'
     // S → 'a' 'b' | 'a' 'c'
     
     grammar->setNTRule("S", "'a' , 'b' ; 'a' , 'c'.");
@@ -67,7 +65,6 @@ TEST_F(ParsingTableTest, DetectConflicts) {
     auto table = ParsingTable::build(grammar.get());
     ASSERT_NE(table, nullptr);
     
-    // Должен быть конфликт в ячейке M[S, 'a']
     EXPECT_TRUE(table->hasConflicts());
     EXPECT_GT(table->getConflicts().size(), 0);
 }
@@ -110,10 +107,8 @@ TEST_F(ParsingTableTest, ComplexGrammar) {
     auto table = ParsingTable::build(grammar.get());
     ASSERT_NE(table, nullptr);
     
-    // Проверяем что таблица построена без конфликтов (это LL(1) грамматика)
     EXPECT_FALSE(table->hasConflicts());
     
-    // Проверяем некоторые ячейки
     int numId = grammar->findTerminal("num");
     int plusId = grammar->findTerminal("+");
     

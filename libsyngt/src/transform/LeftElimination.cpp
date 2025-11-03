@@ -24,7 +24,6 @@ void LeftElimination::eliminate(Grammar* grammar) {
 bool LeftElimination::isLeftRecursive(const RETree* node, const NTListItem* nt) {
     if (!node || !nt) return false;
     
-    // Если это нетерминал - проверяем совпадение ID
     if (auto ntNode = dynamic_cast<const RENonTerminal*>(node)) {
         if (ntNode->grammar()) {
             auto nts = ntNode->grammar()->getNonTerminals();
@@ -36,12 +35,10 @@ bool LeftElimination::isLeftRecursive(const RETree* node, const NTListItem* nt) 
         return false;
     }
     
-    // Если это последовательность (And)
     if (auto andNode = dynamic_cast<const REAnd*>(node)) {
         return isLeftRecursive(andNode->left(), nt);
     }
     
-    // Если это альтернатива (Or)
     if (auto orNode = dynamic_cast<const REOr*>(node)) {
         return isLeftRecursive(orNode->left(), nt);
     }
@@ -77,11 +74,9 @@ void LeftElimination::collectAlphaAndBeta(
 ) {
     if (!root) return;
     
-    // Сначала собираем ВСЕ альтернативы в плоский список
     std::vector<const RETree*> alternatives;
     collectAlternativesFlat(root, alternatives);
     
-    // Теперь для каждой альтернативы проверяем леворекурсивность
     for (const RETree* alt : alternatives) {
         if (isLeftRecursive(alt, nt)) {
             auto alpha = extractAlpha(alt, nt);
@@ -95,7 +90,6 @@ void LeftElimination::collectAlphaAndBeta(
 std::unique_ptr<RETree> LeftElimination::extractAlpha(const RETree* node, const NTListItem* nt) {
     if (!node || !nt) return nullptr;
     
-    // Базовый случай: это сам нетерминал A (без α)
     if (auto ntNode = dynamic_cast<const RENonTerminal*>(node)) {
         if (ntNode->grammar()) {
             auto nts = ntNode->grammar()->getNonTerminals();
@@ -108,27 +102,20 @@ std::unique_ptr<RETree> LeftElimination::extractAlpha(const RETree* node, const 
         }
     }
     
-    // Если это последовательность And
     if (auto andNode = dynamic_cast<const REAnd*>(node)) {
-        // Проверяем, рекурсивна ли левая часть
         if (isLeftRecursive(andNode->left(), nt)) {
-            // Рекурсивно извлекаем α из левой части
             auto leftAlpha = extractAlpha(andNode->left(), nt);
             
-            // Правая часть - всегда часть α
             auto rightCopy = andNode->right()->copy();
             
             if (leftAlpha) {
-                // Комбинируем: leftAlpha , right
                 return REAnd::make(std::move(leftAlpha), std::move(rightCopy));
             } else {
-                // Левая часть = просто A, α начинается с right
                 return rightCopy;
             }
         }
     }
     
-    // Не рекурсивный случай
     return nullptr;
 }
 
@@ -149,7 +136,6 @@ std::unique_ptr<RETree> LeftElimination::buildBetaWithRecursion(
         auto recNT = std::make_unique<RENonTerminal>(grammar, recId, false);
         auto betaWithRec = REAnd::make(std::move(beta), std::move(recNT));
         
-        // Объединяем через Or
         if (!result) {
             result = std::move(betaWithRec);
         } else {
@@ -168,7 +154,6 @@ std::unique_ptr<RETree> LeftElimination::buildAlphaWithRecursion(
     int recId = grammar->findNonTerminal(recursiveName);
     if (recId < 0) return nullptr;
 
-// В начале buildAlphaWithRecursion после проверки recId
 bool allEmpty = true;
 for (const auto& alpha : alphaList) {
     if (alpha) {
@@ -177,7 +162,6 @@ for (const auto& alpha : alphaList) {
     }
 }
 
-// Если все α пустые, A' просто не нужен - возвращаем только epsilon
 if (allEmpty) {
     int epsilonId = grammar->addSemantic("@");
     return std::make_unique<RESemantic>(grammar, epsilonId);
@@ -185,7 +169,6 @@ if (allEmpty) {
     
     std::unique_ptr<RETree> result;
     
-    // Строим α A' для каждой α
     for (auto& alpha : alphaList) {
         auto recNT = std::make_unique<RENonTerminal>(grammar, recId, false);
         
@@ -194,11 +177,10 @@ if (allEmpty) {
             // α , A'
             alphaWithRec = REAnd::make(std::move(alpha), std::move(recNT));
         } else {
-            // Просто A' (если α была пустой)
+            // A' 
             alphaWithRec = std::move(recNT);
         }
         
-        // Объединяем через Or
         if (!result) {
             result = std::move(alphaWithRec);
         } else {
@@ -220,8 +202,6 @@ if (allEmpty) {
 
 }
 
-#include <iostream> // ДОБАВИТЬ В НАЧАЛО ФАЙЛА!
-
 void syngt::LeftElimination::eliminateForNonTerminal(NTListItem* nt, Grammar* grammar) {
     if (!nt || !grammar) return;
     if (!hasDirectLeftRecursion(nt)) return;
@@ -229,23 +209,19 @@ void syngt::LeftElimination::eliminateForNonTerminal(NTListItem* nt, Grammar* gr
     RETree* root = nt->root();
     if (!root) return;
     
-    // Списки для α (рекурсивные) и β (нерекурсивные) части
     std::vector<std::unique_ptr<RETree>> alphaList;
     std::vector<std::unique_ptr<RETree>> betaList;
     
-    // Разделяем правило
     collectAlphaAndBeta(root, nt, alphaList, betaList);
     
-    // Если нет нерекурсивных альтернатив - невозможно устранить
     if (betaList.empty()) {
         return;
     }
     
-    // Создаем новый нетерминал A'
     std::string newName = nt->name() + "_rec";
     grammar->addNonTerminal(newName);
     
-    // Строим A → β A'
+    // A → β A'
     auto newRoot = buildBetaWithRecursion(betaList, newName, grammar);
     if (newRoot) {
         nt->setRoot(std::move(newRoot));

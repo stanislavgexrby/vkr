@@ -18,7 +18,7 @@ protected:
 TEST_F(RemoveUselessTest, RemoveUnreachable) {
     // S → A
     // A → 'a'
-    // B → 'b'  ← недостижим!
+    // B → 'b'
     
     grammar->addNonTerminal("A");
     grammar->addNonTerminal("B");
@@ -29,7 +29,6 @@ TEST_F(RemoveUselessTest, RemoveUnreachable) {
     
     RemoveUseless::remove(grammar.get());
     
-    // B должен быть удален (правило пустое)
     NTListItem* b = grammar->getNTItem("B");
     if (b) {
         EXPECT_FALSE(b->hasRoot());
@@ -38,13 +37,12 @@ TEST_F(RemoveUselessTest, RemoveUnreachable) {
 
 TEST_F(RemoveUselessTest, RemoveNonProductive) {
     // S → A
-    // A → B  ← непродуктивен (B не определен)
+    // A → B
     
     grammar->addNonTerminal("A");
     grammar->setNTRule("S", "A.");
-    grammar->setNTRule("A", "B.");  // B не существует
+    grammar->setNTRule("A", "B.");
     
-    // A непродуктивен, должен быть удален
     RemoveUseless::remove(grammar.get());
     
     NTListItem* a = grammar->getNTItem("A");
@@ -63,7 +61,6 @@ TEST_F(RemoveUselessTest, KeepProductive) {
     
     RemoveUseless::remove(grammar.get());
     
-    // Все символы продуктивны и достижимы
     NTListItem* s = grammar->getNTItem("S");
     NTListItem* a = grammar->getNTItem("A");
     
@@ -75,8 +72,8 @@ TEST_F(RemoveUselessTest, ComplexGrammar) {
     // S → A B
     // A → 'a'
     // B → 'b'
-    // C → 'c'  ← недостижим
-    // D → E    ← непродуктивен (E не определен)
+    // C → 'c'
+    // D → E
     
     grammar->addNonTerminal("A");
     grammar->addNonTerminal("B");
@@ -91,12 +88,10 @@ TEST_F(RemoveUselessTest, ComplexGrammar) {
     
     RemoveUseless::remove(grammar.get());
     
-    // S, A, B должны остаться
     EXPECT_TRUE(grammar->getNTItem("S")->hasRoot());
     EXPECT_TRUE(grammar->getNTItem("A")->hasRoot());
     EXPECT_TRUE(grammar->getNTItem("B")->hasRoot());
     
-    // C, D должны быть удалены
     NTListItem* c = grammar->getNTItem("C");
     NTListItem* d = grammar->getNTItem("D");
     if (c) EXPECT_FALSE(c->hasRoot());

@@ -4,7 +4,7 @@
 #include <string>
 
 namespace syngt {
-    class SemanticIDList;  // Forward declaration
+    class SemanticIDList;
 }
 
 namespace syngt {
