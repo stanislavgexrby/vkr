@@ -43,7 +43,6 @@ cd build
 cmake ..
 cmake --build . --config Release
 
-# Запустить тесты
 ctest -C Release --output-on-failure
 ```
 
