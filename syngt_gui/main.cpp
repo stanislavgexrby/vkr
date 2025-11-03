@@ -51,10 +51,14 @@ static syngt::graphics::DrawObject* hoveredObject = nullptr;
 static syngt::graphics::DrawObject* contextMenuObject = nullptr;
 static bool showAddTerminalDialog = false;
 static bool showAddNonTerminalDialog = false;
-static bool showAddReferenceDialog = false;  // ДОБАВИТЬ
+static bool showAddReferenceDialog = false;
 static bool showEditDialog = false;
 static char newSymbolName[256] = "";
-static bool useOrOperator = false;  // ДОБАВИТЬ
+static bool useOrOperator = false;
+
+// Layout sizes
+static float leftWidth = 800.0f;
+static float rightPanelButtonsHeight = 200.0f;
 
 std::string LoadTextFile(const char* filename) {
     std::ifstream file(filename);
@@ -332,14 +336,61 @@ void UpdateDiagram() {
         return;
     }
     
-    syngt::NTListItem* item = grammar->getNTItem(nts[activeNTIndex]);
-    if (!item || !item->hasRoot()) {
+    std::string activeNT = nts[activeNTIndex];
+    
+    // Проверяем специальные случаи
+    if (activeNT == "EOGram" || activeNT == "EOGram!") {
         drawObjects.reset();
+        ClearOutput();
+        AppendOutput("EOGram! is not a displayable rule\n");
         return;
     }
     
-    drawObjects = std::make_unique<syngt::graphics::DrawObjectList>(grammar.get());
-    syngt::Creator::createDrawObjects(drawObjects.get(), item->root());
+    syngt::NTListItem* item = grammar->getNTItem(activeNT);
+    if (!item) {
+        drawObjects.reset();
+        ClearOutput();
+        AppendOutput("Cannot find rule for '");
+        AppendOutput(activeNT.c_str());
+        AppendOutput("'\n");
+        return;
+    }
+    
+    if (!item->hasRoot()) {
+        drawObjects = std::make_unique<syngt::graphics::DrawObjectList>(grammar.get());
+        
+        auto firstDO = std::make_unique<syngt::graphics::DrawObjectFirst>();
+        firstDO->place();
+        
+        syngt::graphics::DrawObjectFirst* firstPtr = firstDO.get();
+        drawObjects->add(std::move(firstDO));
+        
+        auto lastDO = std::make_unique<syngt::graphics::DrawObjectLast>();
+        auto arrow = std::make_unique<syngt::graphics::Arrow>(syngt::graphics::cwFORWARD, firstPtr);
+        lastDO->setInArrow(std::move(arrow));
+        
+        int lastX = firstPtr->endX() + 20;
+        int lastY = firstPtr->y();
+        lastDO->setPositionForCreator(lastX, lastY);
+        
+        drawObjects->add(std::move(lastDO));
+        
+        drawObjects->setWidth(lastX + syngt::graphics::NS_Radius + syngt::graphics::HorizontalSkipFromBorder);
+        drawObjects->setHeight(firstPtr->y() + syngt::graphics::VerticalSkipFromBorder + syngt::graphics::NS_Radius);
+        
+        return;
+    }
+    
+    try {
+        drawObjects = std::make_unique<syngt::graphics::DrawObjectList>(grammar.get());
+        syngt::Creator::createDrawObjects(drawObjects.get(), item->root());
+    } catch (const std::exception& e) {
+        drawObjects.reset();
+        ClearOutput();
+        AppendOutput("Error creating diagram:\n");
+        AppendOutput(e.what());
+        AppendOutput("\n");
+    }
 }
 
 syngt::graphics::DrawObject* FindDrawObjectAt(const ImVec2& pos, const ImVec2& offset) {
@@ -747,125 +798,87 @@ void DeleteSelectedObjects() {
 }
 
 void AddTerminalToGrammar(const std::string& name) {
-    if (!grammar) {
-        ClearOutput();
-        AppendOutput("No grammar loaded!\n");
-        return;
-    }
-    
-    auto terminals = grammar->getTerminals();
-    for (const auto& term : terminals) {
-        if (term == name) {
-            ClearOutput();
-            AppendOutput("Terminal '");
-            AppendOutput(name.c_str());
-            AppendOutput("' already exists!\n");
-            return;
-        }
-    }
+    if (!grammar) return;
     
     auto nts = grammar->getNonTerminals();
-    if (activeNTIndex < 0 || activeNTIndex >= static_cast<int>(nts.size())) {
-        ClearOutput();
-        AppendOutput("No active non-terminal!\n");
-        return;
-    }
+    if (activeNTIndex < 0 || activeNTIndex >= static_cast<int>(nts.size())) return;
     
     std::string text = grammarText;
     std::string ntName = nts[activeNTIndex];
     
-    // Ищем правило
     size_t pos = text.find(ntName + " :");
-    if (pos == std::string::npos) {
-        pos = text.find(ntName + ":");
-    }
-    
-    if (pos == std::string::npos) {
-        ClearOutput();
-        AppendOutput("ERROR: Cannot find rule for '");
-        AppendOutput(ntName.c_str());
-        AppendOutput("'\n");
-        return;
-    }
+    if (pos == std::string::npos) pos = text.find(ntName + ":");
+    if (pos == std::string::npos) return;
     
     size_t colonPos = text.find(":", pos);
     size_t dotPos = text.find(".", colonPos);
-    
-    if (colonPos == std::string::npos || dotPos == std::string::npos) {
-        ClearOutput();
-        AppendOutput("ERROR: Malformed rule\n");
-        return;
-    }
+    if (colonPos == std::string::npos || dotPos == std::string::npos) return;
     
     std::string ruleBody = text.substr(colonPos + 1, dotPos - colonPos - 1);
     
-    // Удаляем все вхождения eps
     size_t epsPos = 0;
     while ((epsPos = ruleBody.find("eps", epsPos)) != std::string::npos) {
-        // Проверяем что это отдельное слово
         bool isStart = (epsPos == 0 || !isalnum(ruleBody[epsPos-1]));
         bool isEnd = (epsPos + 3 >= ruleBody.length() || !isalnum(ruleBody[epsPos + 3]));
-        
         if (isStart && isEnd) {
             size_t endPos = epsPos + 3;
-            
-            // Удаляем пробелы после eps
-            while (endPos < ruleBody.length() && isspace(ruleBody[endPos])) {
-                endPos++;
-            }
-            
-            // Удаляем разделители после eps
+            while (endPos < ruleBody.length() && isspace(ruleBody[endPos])) endPos++;
             if (endPos < ruleBody.length() && (ruleBody[endPos] == ',' || ruleBody[endPos] == ';')) {
                 endPos++;
-                while (endPos < ruleBody.length() && isspace(ruleBody[endPos])) {
-                    endPos++;
-                }
+                while (endPos < ruleBody.length() && isspace(ruleBody[endPos])) endPos++;
             }
-            
             ruleBody.erase(epsPos, endPos - epsPos);
         } else {
             epsPos++;
         }
     }
     
-    // Trim
     size_t start = ruleBody.find_first_not_of(" \t\n\r");
     size_t end = ruleBody.find_last_not_of(" \t\n\r");
-    
     std::string trimmedBody;
     if (start != std::string::npos && end != std::string::npos) {
         trimmedBody = ruleBody.substr(start, end - start + 1);
-    } else {
-        trimmedBody = "";
     }
     
-    // Формируем новое тело правила
     std::string newBody;
+    std::string terminalStr = "'" + name + "'";
+    
     if (trimmedBody.empty()) {
-        newBody = " '" + name + "'";
+        newBody = " " + terminalStr;
+    } else if (useOrOperator) {
+        newBody = " " + trimmedBody + " ; " + terminalStr;
     } else {
-        newBody = " " + trimmedBody + ", '" + name + "'";
+        size_t lastSemicolon = trimmedBody.rfind(';');
+        
+        if (lastSemicolon != std::string::npos) {
+            std::string beforeLast = trimmedBody.substr(0, lastSemicolon + 1);
+            std::string lastAlt = trimmedBody.substr(lastSemicolon + 1);
+            
+            size_t altStart = lastAlt.find_first_not_of(" \t\n\r");
+            if (altStart != std::string::npos) {
+                lastAlt = lastAlt.substr(altStart);
+            }
+            
+            newBody = " " + beforeLast + " " + lastAlt + ", " + terminalStr;
+        } else {
+            newBody = " " + trimmedBody + ", " + terminalStr;
+        }
     }
     
-    // Заменяем
     text.replace(colonPos + 1, dotPos - colonPos - 1, newBody);
     
-    if (text.size() >= sizeof(grammarText)) {
-        ClearOutput();
-        AppendOutput("ERROR: Text too large!\n");
-        return;
-    }
+    if (text.size() >= sizeof(grammarText)) return;
     
     strcpy_s(grammarText, sizeof(grammarText), text.c_str());
     RebuildGrammarFromText();
     SaveCurrentState();
     
     ClearOutput();
-    AppendOutput("Added terminal '");
+    AppendOutput("Added '");
     AppendOutput(name.c_str());
-    AppendOutput("' to '");
-    AppendOutput(ntName.c_str());
-    AppendOutput("'\n");
+    AppendOutput("' ");
+    AppendOutput(useOrOperator ? "(OR)" : "(AND)");
+    AppendOutput("\n");
 }
 
 void AddNonTerminalReference(const std::string& ntRef, bool useOr) {
@@ -995,7 +1008,6 @@ void AddNonTerminalReference(const std::string& ntRef, bool useOr) {
 
 void AddSymbolWithOperator(const std::string& symbol, bool isTerminal, bool useOr) {
     if (isTerminal) {
-        // Модифицируем AddTerminalToGrammar с поддержкой OR
         if (!grammar) return;
         
         auto nts = grammar->getNonTerminals();
@@ -1014,7 +1026,6 @@ void AddSymbolWithOperator(const std::string& symbol, bool isTerminal, bool useO
         
         std::string ruleBody = text.substr(colonPos + 1, dotPos - colonPos - 1);
         
-        // Удаляем eps
         size_t epsPos = 0;
         while ((epsPos = ruleBody.find("eps", epsPos)) != std::string::npos) {
             bool isStart = (epsPos == 0 || !isalnum(ruleBody[epsPos-1]));
@@ -1072,7 +1083,6 @@ void AddNonTerminalToGrammar(const std::string& name) {
         return;
     }
     
-    // Проверяем, не существует ли уже
     auto nts = grammar->getNonTerminals();
     for (const auto& nt : nts) {
         if (nt == name) {
@@ -1084,13 +1094,10 @@ void AddNonTerminalToGrammar(const std::string& name) {
         }
     }
     
-    // Добавляем новое правило
     std::string text = grammarText;
     
-    // Находим EOGram!
     size_t eogramPos = text.find("EOGram!");
     if (eogramPos != std::string::npos) {
-        // Добавляем перевод строки перед если нужно
         if (eogramPos > 0 && text[eogramPos - 1] != '\n') {
             text.insert(eogramPos, "\n");
             eogramPos++;
@@ -1103,7 +1110,6 @@ void AddNonTerminalToGrammar(const std::string& name) {
             strcpy_s(grammarText, sizeof(grammarText), text.c_str());
             RebuildGrammarFromText();
             
-            // Находим индекс нового нетерминала и делаем его активным
             if (grammar) {
                 auto newNts = grammar->getNonTerminals();
                 for (int i = 0; i < static_cast<int>(newNts.size()); ++i) {
@@ -1468,10 +1474,9 @@ int main(int, char**)
     
     // Default example
     const char* exampleGrammar = 
-        "# Example grammar\n"
-        "S : A, B.\n"
-        "A : 'a' ; eps.\n"
-        "B : 'b'.\n"
+        "{ Example: Simple expression grammar }\n"
+        "E : T, '+', E ; T.\n"
+        "T : '(', E, ')' ; 'id'.\n"
         "EOGram!\n";
     strcpy_s(grammarText, sizeof(grammarText), exampleGrammar);
 
@@ -1570,9 +1575,6 @@ int main(int, char**)
                      ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | 
                      ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar);
 
-        // Splitter
-        static float leftWidth = io.DisplaySize.x * 0.55f;
-        
         ImGui::BeginChild("LeftPanel", ImVec2(leftWidth, 0), true);
         
         if (ImGui::BeginTabBar("LeftTabs")) {
@@ -1606,7 +1608,15 @@ int main(int, char**)
                     if (ImGui::BeginCombo("##nt_select", nts[activeNTIndex].c_str())) {
                         for (int i = 0; i < static_cast<int>(nts.size()); ++i) {
                             bool is_selected = (activeNTIndex == i);
-                            if (ImGui::Selectable(nts[i].c_str(), is_selected)) {
+                            
+                            std::string label = nts[i];
+                            syngt::NTListItem* item = grammar->getNTItem(nts[i]);
+                            
+                            if (!item || !item->hasRoot()) {
+                                label += " [eps]";
+                            }
+                            
+                            if (ImGui::Selectable(label.c_str(), is_selected)) {
                                 activeNTIndex = i;
                                 UpdateDiagram();
                             }
@@ -1619,20 +1629,26 @@ int main(int, char**)
                     
                     ImGui::Separator();
                     
-                    ImGui::BeginChild("DiagramCanvas", ImVec2(0, 0), false);
+                    ImGui::BeginChild("DiagramCanvas", ImVec2(0, 0), false, ImGuiWindowFlags_HorizontalScrollbar);
                     
                     if (drawObjects && drawObjects->count() > 0) {
+                        float diagramWidth = static_cast<float>(drawObjects->width());
+                        float diagramHeight = static_cast<float>(drawObjects->height());
+                        
                         ImVec2 canvasPos = ImGui::GetCursorScreenPos();
-                        ImVec2 canvasSize = ImGui::GetContentRegionAvail();
+                        ImVec2 scrollPos = ImVec2(ImGui::GetScrollX(), ImGui::GetScrollY());
+                        
+                        ImGui::Dummy(ImVec2(diagramWidth + 40, diagramHeight + 100));
+                        
                         ImVec2 offset = ImVec2(canvasPos.x + 20, canvasPos.y + 50);
                         
-                        // Canvas как кликабельная область
-                        ImGui::InvisibleButton("##canvas", canvasSize);
+                        ImGui::SetCursorScreenPos(canvasPos);
+                        ImGui::InvisibleButton("##canvas", ImVec2(diagramWidth + 40, diagramHeight + 100));
                         bool isHovered = ImGui::IsItemHovered();
                         
                         ImVec2 mousePos = ImGui::GetMousePos();
                         
-                        // Обработка наведения
+                        // Hoving
                         if (isHovered && !isDragging) {
                             hoveredObject = FindDrawObjectAt(mousePos, offset);
                             if (hoveredObject) {
@@ -1642,7 +1658,7 @@ int main(int, char**)
                             hoveredObject = nullptr;
                         }
                         
-                        // Обработка левого клика
+                        // Left click
                         if (isHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
                             syngt::graphics::DrawObject* clicked = FindDrawObjectAt(mousePos, offset);
                             
@@ -1654,62 +1670,48 @@ int main(int, char**)
                                     drawObjects->unselectAll();
                                 }
                                 drawObjects->changeSelection(clicked);
+                                
+                                ClearOutput();
+                                char buf[256];
+                                snprintf(buf, sizeof(buf), "Started dragging object at (%d,%d)\n", 
+                                         clicked->x(), clicked->y());
+                                AppendOutput(buf);
                             } else {
                                 drawObjects->unselectAll();
                             }
                         }
                         
-                        // Обработка перетаскивания
+                        // Dragging
                         if (isDragging) {
-                            if (ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
+                            if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+                                ImVec2 currentMousePos = ImGui::GetMousePos();
                                 ImVec2 delta = ImVec2(
-                                    mousePos.x - lastMousePos.x,
-                                    mousePos.y - lastMousePos.y
+                                    currentMousePos.x - lastMousePos.x,
+                                    currentMousePos.y - lastMousePos.y
                                 );
                                 
-                                drawObjects->selectedMove(
-                                    static_cast<int>(delta.x),
-                                    static_cast<int>(delta.y)
-                                );
+                                if (drawObjects && (delta.x != 0 || delta.y != 0)) {
+                                    drawObjects->selectedMove(
+                                        static_cast<int>(delta.x),
+                                        static_cast<int>(delta.y)
+                                    );
+                                }
                                 
-                                lastMousePos = mousePos;
+                                lastMousePos = currentMousePos;
                             } else {
                                 isDragging = false;
+                                ClearOutput();
+                                AppendOutput("Drag completed\n");
                             }
                         }
                         
-                        // Обработка правого клика
+                        // Right click
                         if (isHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
                             contextMenuObject = FindDrawObjectAt(mousePos, offset);
                             ImGui::OpenPopup("DiagramContextMenu");
                         }
 
-                        if (showAddReferenceDialog) {
-                            ImGui::OpenPopup("Add Reference");
-                            showAddReferenceDialog = false;
-                        }
-                        
-                        if (ImGui::BeginPopupModal("Add Reference", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-                            ImGui::Text("Select non-terminal to reference:");
-                            
-                            if (grammar) {
-                                auto nts = grammar->getNonTerminals();
-                                for (const auto& nt : nts) {
-                                    if (ImGui::Selectable(nt.c_str())) {
-                                        AddNonTerminalReference(nt, useOrOperator);
-                                        ImGui::CloseCurrentPopup();
-                                    }
-                                }
-                            }
-                            
-                            ImGui::Separator();
-                            if (ImGui::Button("Cancel")) {
-                                ImGui::CloseCurrentPopup();
-                            }
-                            ImGui::EndPopup();
-                        }
-                        
-                        // Контекстное меню
+                        // Context menu
                         if (ImGui::BeginPopup("DiagramContextMenu")) {
                             if (contextMenuObject) {
                                 if (ImGui::MenuItem("Edit Symbol")) {
@@ -1760,21 +1762,21 @@ int main(int, char**)
                             ImGui::EndPopup();
                         }
                         
-                        // Рендеринг
+                        // Diagram render
                         ImDrawList* drawList = ImGui::GetWindowDrawList();
-                        drawList->PushClipRect(canvasPos, 
-                                             ImVec2(canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y), 
-                                             true);
+                        ImVec2 clipMin = ImVec2(canvasPos.x, canvasPos.y);
+                        ImVec2 clipMax = ImVec2(canvasPos.x + ImGui::GetContentRegionAvail().x, 
+                                               canvasPos.y + ImGui::GetContentRegionAvail().y);
+                        drawList->PushClipRect(clipMin, clipMax, true);
                         
-                        drawList->AddRectFilled(canvasPos, 
-                                               ImVec2(canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y),
-                                               IM_COL32(30, 30, 35, 255));
+                        // Background
+                        drawList->AddRectFilled(clipMin, clipMax, IM_COL32(30, 30, 35, 255));
                         
                         RenderDiagram(drawList, offset);
                         
                         drawList->PopClipRect();
                         
-                        // Информация о выделении
+                        // Selection info
                         int selectedCount = 0;
                         for (int i = 0; i < drawObjects->count(); ++i) {
                             if ((*drawObjects)[i]->selected()) {
@@ -1782,7 +1784,8 @@ int main(int, char**)
                             }
                         }
                         if (selectedCount > 0) {
-                            ImGui::SetCursorPos(ImVec2(10, canvasSize.y - 30));
+                            ImVec2 infoPos = ImVec2(canvasPos.x + 10, canvasPos.y + ImGui::GetContentRegionAvail().y - 30);
+                            ImGui::SetCursorScreenPos(infoPos);
                             ImGui::Text("Selected: %d", selectedCount);
                             ImGui::SameLine();
                             if (ImGui::SmallButton("Deselect")) {
@@ -1790,7 +1793,37 @@ int main(int, char**)
                             }
                         }
                     } else {
-                        ImGui::Text("No diagram to display. Parse grammar first.");
+                        // Reason for no diagram
+                        auto nts = grammar->getNonTerminals();
+                        if (activeNTIndex >= 0 && activeNTIndex < static_cast<int>(nts.size())) {
+                            std::string activeNT = nts[activeNTIndex];
+                            
+                            ImGui::TextWrapped("No diagram for '%s'", activeNT.c_str());
+                            ImGui::Separator();
+                            
+                            syngt::NTListItem* item = grammar->getNTItem(activeNT);
+                            if (!item) {
+                                ImGui::TextWrapped("Rule not found in grammar.");
+                            } else if (!item->hasRoot()) {
+                                ImGui::TextWrapped("Rule contains only 'eps' (empty production).");
+                                ImGui::Separator();
+                                if (ImGui::Button("Add Terminal")) {
+                                    showAddTerminalDialog = true;
+                                    useOrOperator = false;
+                                    newSymbolName[0] = '\0';
+                                }
+                                ImGui::SameLine();
+                                if (ImGui::Button("Add Reference")) {
+                                    showAddReferenceDialog = true;
+                                    useOrOperator = false;
+                                    newSymbolName[0] = '\0';
+                                }
+                            } else {
+                                ImGui::TextWrapped("Unknown diagram error.");
+                            }
+                        } else {
+                            ImGui::Text("No diagram to display. Parse grammar first.");
+                        }
                     }
                     
                     ImGui::EndChild();
@@ -1807,32 +1840,67 @@ int main(int, char**)
         ImGui::EndChild();
 
         ImGui::SameLine();
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.3f, 0.3f, 0.3f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.4f, 0.4f, 0.4f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.5f, 0.5f, 0.5f, 1.0f));
+        ImGui::Button("##vsplitter", ImVec2(8.0f, -1));
+        bool vsplitterActive = ImGui::IsItemActive();
+        bool vsplitterHovered = ImGui::IsItemHovered();
+        ImGui::PopStyleColor(3);
+        
+        if (vsplitterActive) {
+            leftWidth += ImGui::GetIO().MouseDelta.x;
+            if (leftWidth < 200.0f) leftWidth = 200.0f;
+            if (leftWidth > io.DisplaySize.x - 200.0f) leftWidth = io.DisplaySize.x - 200.0f;
+        }
+        if (vsplitterHovered) {
+            ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+        }
+        ImGui::SameLine();
 
+        // Right panel
         ImGui::BeginChild("RightPanel", ImVec2(0, 0), true);
         
+        // Operatiion panel
+        ImGui::BeginChild("Operations", ImVec2(0, rightPanelButtonsHeight), true);
         ImGui::Text("Operations");
         ImGui::Separator();
         
-        ImGui::BeginGroup();
-        if (ImGui::Button("Eliminate Left Recursion", ImVec2(200, 0))) {
+        if (ImGui::Button("Eliminate Left Recursion", ImVec2(-FLT_MIN, 0))) {
             EliminateLeftRecursion();
         }
-        if (ImGui::Button("Left Factorization", ImVec2(200, 0))) {
+        if (ImGui::Button("Left Factorization", ImVec2(-FLT_MIN, 0))) {
             LeftFactorize();
         }
-        if (ImGui::Button("Remove Useless", ImVec2(200, 0))) {
+        if (ImGui::Button("Remove Useless", ImVec2(-FLT_MIN, 0))) {
             RemoveUselessSymbols();
         }
-        if (ImGui::Button("Check LL(1)", ImVec2(200, 0))) {
+        if (ImGui::Button("Check LL(1)", ImVec2(-FLT_MIN, 0))) {
             CheckLL1();
         }
-        ImGui::EndGroup();
+        ImGui::EndChild();
         
-        ImGui::Separator();
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.3f, 0.3f, 0.3f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.4f, 0.4f, 0.4f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.5f, 0.5f, 0.5f, 1.0f));
+        ImGui::Button("##hsplitter", ImVec2(-1, 8.0f));
+        bool hsplitterActive = ImGui::IsItemActive();
+        bool hsplitterHovered = ImGui::IsItemHovered();
+        ImGui::PopStyleColor(3);
+        
+        if (hsplitterActive) {
+            rightPanelButtonsHeight += ImGui::GetIO().MouseDelta.y;
+            if (rightPanelButtonsHeight < 100.0f) rightPanelButtonsHeight = 100.0f;
+            if (rightPanelButtonsHeight > io.DisplaySize.y - 300.0f) rightPanelButtonsHeight = io.DisplaySize.y - 300.0f;
+        }
+        if (hsplitterHovered) {
+            ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
+        }
+        
+        // Output
+        ImGui::BeginChild("Output", ImVec2(0, 0), true);
         ImGui::Text("Output:");
         ImGui::Separator();
-        
-        ImGui::BeginChild("Output", ImVec2(0, 0), false, ImGuiWindowFlags_HorizontalScrollbar);
         ImGui::TextWrapped("%s", outputText);
         ImGui::EndChild();
         

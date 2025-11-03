@@ -22,14 +22,14 @@ Grammar::Grammar()
 }
 
 void Grammar::fillNew() {
-    m_terminals->clear();
-    m_semantics->clear();
-    m_nonTerminals->clear();
-    m_macros->clear();
+    m_terminals = std::make_unique<TerminalList>();
+    m_terminals->add("");
     
-    m_terminals->add("");  // Epsilon
+    m_semantics = std::make_unique<SemanticList>();
     
-    m_nonTerminals->fillNew();
+    m_nonTerminals = std::make_unique<NonTerminalList>();
+    
+    m_macros = std::make_unique<MacroList>();
 }
 
 void Grammar::load(const std::string& filename) {

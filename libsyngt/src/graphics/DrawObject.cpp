@@ -136,31 +136,36 @@ DrawObjectLeaf::DrawObjectLeaf(Grammar* grammar, int id)
     : m_id(id)
     , m_grammar(grammar)
 {
-    // NOTE: Не вызываем getNameFromGrammar() здесь, т.к. это виртуальная функция
-    // Длина устанавливается в конструкторах наследников
-    if (id == 0) {
-        m_length = NS_NullTerminal * 2;
-    }
 }
 
 void DrawObjectLeaf::setLengthFromString(const std::string& s) {
-    // Примерный расчет ширины текста
-    // В будущем это будет использовать QFontMetrics
-    const int charWidth = 8; // Примерная ширина символа
-    m_length = (NS_Radius * 2) + static_cast<int>(s.length()) * charWidth;
+    const int charWidth = 10;      
+    const int padding = 20;         
+    const int minTotalWidth = 50;  
+    
+    int textWidth = static_cast<int>(s.length()) * charWidth;
+    int totalWidth = (NS_Radius * 2) + padding + textWidth;
+    
+    if (totalWidth < minTotalWidth) {
+        totalWidth = minTotalWidth;
+    }
+    
+    m_length = totalWidth;
 }
 
 DrawObjectTerminal::DrawObjectTerminal(Grammar* grammar, int id)
     : DrawObjectLeaf(grammar, id)
 {
-    if (id != 0) {
-        setLengthFromString(getNameFromGrammar());
+    std::string name = getNameFromGrammar();
+    if (!name.empty()) {
+        setLengthFromString(name);
+    } else {
+        m_length = NS_NullTerminal * 2;
     }
 }
 
 std::string DrawObjectTerminal::getNameFromGrammar() const {
     if (!m_grammar) return "";
-    // TODO: добавить метод getTerminalName() в Grammar
     auto terminals = m_grammar->getTerminals();
     if (m_id >= 0 && m_id < static_cast<int>(terminals.size())) {
         return terminals[m_id];
@@ -171,14 +176,16 @@ std::string DrawObjectTerminal::getNameFromGrammar() const {
 DrawObjectNonTerminal::DrawObjectNonTerminal(Grammar* grammar, int id)
     : DrawObjectLeaf(grammar, id)
 {
-    if (id != 0) {
-        setLengthFromString(getNameFromGrammar());
+    std::string name = getNameFromGrammar();
+    if (!name.empty()) {
+        setLengthFromString(name);
+    } else {
+        m_length = NS_NullTerminal * 2;
     }
 }
 
 std::string DrawObjectNonTerminal::getNameFromGrammar() const {
     if (!m_grammar) return "";
-    // TODO: добавить метод getNonTerminalName() в Grammar
     auto nts = m_grammar->getNonTerminals();
     if (m_id >= 0 && m_id < static_cast<int>(nts.size())) {
         return nts[m_id];
@@ -194,7 +201,6 @@ DrawObjectMacro::DrawObjectMacro(Grammar* grammar, int id)
 
 std::string DrawObjectMacro::getNameFromGrammar() const {
     if (!m_grammar) return "";
-    // TODO: добавить метод getMacroName() в Grammar
     auto macros = m_grammar->getMacros();
     if (m_id >= 0 && m_id < static_cast<int>(macros.size())) {
         return macros[m_id];
