@@ -1,3 +1,5 @@
+# SynGT C++ - Syntax Grammar Transformation Tool
+
 ## Requirements
 
 - **C++ Compiler**: GCC 9+ or Clang 10+ with C++17 support
