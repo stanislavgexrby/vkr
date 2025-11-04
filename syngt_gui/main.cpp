@@ -29,10 +29,14 @@ static ID3D11RenderTargetView*  g_mainRenderTargetView = nullptr;
 
 bool CreateDeviceD3D(HWND hWnd);
 void CleanupDeviceD3D();
+void AddNonTerminalReferenceToGrammar(const std::string& name);
+void LoadRuleToEditor();
+void BuildRule();
 void CreateRenderTarget();
 void CleanupRenderTarget();
 LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
+static char ruleText[4096] = "";
 static char grammarText[1024 * 64] = "";
 static char outputText[1024 * 64] = "";
 static char currentFile[MAX_PATH] = "";
@@ -45,6 +49,7 @@ static bool showAbout = false;
 static bool showHelp = false;
 
 // Editor state
+static int activeLeftTab = 1; // 0 = Grammar Editor, 1 = Syntax Diagram
 static bool isDragging = false;
 static ImVec2 lastMousePos;
 static syngt::graphics::DrawObject* hoveredObject = nullptr;
@@ -59,6 +64,11 @@ static bool useOrOperator = false;
 // Layout sizes
 static float leftWidth = 800.0f;
 static float rightPanelButtonsHeight = 200.0f;
+
+// Editor state
+static bool isBoxSelecting = false;
+static ImVec2 boxSelectStart;
+static bool skipHistorySave = false;
 
 std::string LoadTextFile(const char* filename) {
     std::ifstream file(filename);
@@ -112,6 +122,39 @@ std::string SaveFileDialog() {
     return "";
 }
 
+void LoadRuleToEditor() {
+    if (!grammar) {
+        ruleText[0] = '\0';
+        return;
+    }
+    
+    auto nts = grammar->getNonTerminals();
+    if (activeNTIndex < 0 || activeNTIndex >= static_cast<int>(nts.size())) {
+        ruleText[0] = '\0';
+        return;
+    }
+    
+    std::string ntName = nts[activeNTIndex];
+    syngt::NTListItem* item = grammar->getNTItem(ntName);
+    
+    if (!item) {
+        // Нетерминал не найден - создаем с eps
+        strcpy_s(ruleText, sizeof(ruleText), "eps");
+        return;
+    }
+    
+    if (item->hasRoot()) {
+        // Есть правило - берем его текст
+        std::string value = item->value();
+        if (value.size() < sizeof(ruleText)) {
+            strcpy_s(ruleText, sizeof(ruleText), value.c_str());
+        }
+    } else {
+        // Правило пустое
+        strcpy_s(ruleText, sizeof(ruleText), "eps");
+    }
+}
+
 void AppendOutput(const char* text) {
     size_t currentLen = strlen(outputText);
     size_t textLen = strlen(text);
@@ -122,101 +165,6 @@ void AppendOutput(const char* text) {
 
 void ClearOutput() {
     outputText[0] = '\0';
-}
-
-// Undo/Redo
-void SaveCurrentState() {
-    if (!grammar) return;
-    
-    auto nts = grammar->getNonTerminals();
-    std::vector<std::string> names;
-    std::vector<std::string> values;
-    
-    for (const auto& ntName : nts) {
-        names.push_back(ntName);
-        syngt::NTListItem* item = grammar->getNTItem(ntName);
-        if (item) {
-            values.push_back(item->value());
-        } else {
-            values.push_back("");
-        }
-    }
-    
-    undoRedo.addState(names, values, activeNTIndex, selectionMask);
-}
-
-void Undo() {
-    if (!grammar || !undoRedo.canUndo()) {
-        ClearOutput();
-        AppendOutput("Cannot undo!\n");
-        return;
-    }
-    
-    std::vector<std::string> names;
-    std::vector<std::string> values;
-    int index;
-    syngt::SelectionMask selection;
-    
-    if (undoRedo.stepBack(names, values, index, selection)) {
-        grammar->fillNew();
-        
-        for (size_t i = 0; i < names.size() && i < values.size(); ++i) {
-            grammar->addNonTerminal(names[i]);
-            grammar->setNTRule(names[i], values[i]);
-        }
-        
-        activeNTIndex = index;
-        selectionMask = selection;
-        
-        std::string tempFile = "temp_undo.grm";
-        grammar->save(tempFile);
-        std::string newText = LoadTextFile(tempFile.c_str());
-        std::remove(tempFile.c_str());
-        
-        if (newText.size() < sizeof(grammarText)) {
-            strcpy_s(grammarText, sizeof(grammarText), newText.c_str());
-        }
-        
-        ClearOutput();
-        AppendOutput("Undo successful\n");
-    }
-}
-
-void Redo() {
-    if (!grammar || !undoRedo.canRedo()) {
-        ClearOutput();
-        AppendOutput("Cannot redo!\n");
-        return;
-    }
-    
-    std::vector<std::string> names;
-    std::vector<std::string> values;
-    int index;
-    syngt::SelectionMask selection;
-    
-    if (undoRedo.stepForward(names, values, index, selection)) {
-        grammar->fillNew();
-        
-        for (size_t i = 0; i < names.size() && i < values.size(); ++i) {
-            grammar->addNonTerminal(names[i]);
-            grammar->setNTRule(names[i], values[i]);
-        }
-        
-        activeNTIndex = index;
-        selectionMask = selection;
-        
-        std::string tempFile = "temp_redo.grm";
-        grammar->save(tempFile);
-        std::string newText = LoadTextFile(tempFile.c_str());
-        std::remove(tempFile.c_str());
-        
-        if (newText.size() < sizeof(grammarText)) {
-            strcpy_s(grammarText, sizeof(grammarText), newText.c_str());
-        }
-        
-        ClearOutput();
-        AppendOutput("Redo successful\n");
-    }
 }
 
 // Syntax Grammar
@@ -378,6 +326,7 @@ void UpdateDiagram() {
         drawObjects->setWidth(lastX + syngt::graphics::NS_Radius + syngt::graphics::HorizontalSkipFromBorder);
         drawObjects->setHeight(firstPtr->y() + syngt::graphics::VerticalSkipFromBorder + syngt::graphics::NS_Radius);
         
+        LoadRuleToEditor();
         return;
     }
     
@@ -391,6 +340,8 @@ void UpdateDiagram() {
         AppendOutput(e.what());
         AppendOutput("\n");
     }
+
+    LoadRuleToEditor();
 }
 
 syngt::graphics::DrawObject* FindDrawObjectAt(const ImVec2& pos, const ImVec2& offset) {
@@ -413,6 +364,76 @@ syngt::graphics::DrawObject* FindDrawObjectAt(const ImVec2& pos, const ImVec2& o
     return nullptr;
 }
 
+// Undo/Redo
+void SaveCurrentState() {
+    if (!grammar) return;
+    
+    if (skipHistorySave) {
+        AppendOutput("SaveCurrentState: SKIPPED\n");
+        return;
+    }
+    
+    auto names = grammar->getNonTerminals();
+    std::vector<std::string> values;
+    
+    char buf[256];
+    snprintf(buf, sizeof(buf), "SaveCurrentState: saving %zu rules\n", names.size());
+    AppendOutput(buf);
+    
+    for (const auto& name : names) {
+        auto* item = grammar->getNTItem(name);
+        if (item && item->hasRoot()) {
+            values.push_back(item->value());
+            snprintf(buf, sizeof(buf), "  %s : %s\n", name.c_str(), item->value().c_str());
+            AppendOutput(buf);
+        } else {
+            values.push_back("eps");
+            snprintf(buf, sizeof(buf), "  %s : eps\n", name.c_str());
+            AppendOutput(buf);
+        }
+    }
+    
+    undoRedo.addState(names, values, activeNTIndex, selectionMask);
+    AppendOutput("SaveCurrentState: DONE\n");
+}
+
+void RebuildGrammarFromText() {
+    try {
+        std::string tempFile = "temp_parse.grm";
+        
+        std::ofstream out(tempFile);
+        if (!out) return;
+        out << grammarText;
+        out.close();
+        
+        grammar = std::make_unique<syngt::Grammar>();
+        grammar->load(tempFile);
+        std::remove(tempFile.c_str());
+        
+        auto nts = grammar->getNonTerminals();
+        if (nts.empty()) {
+            activeNTIndex = -1;
+        } else {
+            if (activeNTIndex < 0 || activeNTIndex >= static_cast<int>(nts.size())) {
+                activeNTIndex = 0;
+            }
+        }
+        
+        UpdateDiagram();
+        
+        // ДОБАВИТЬ ПРОВЕРКУ: Сохраняем только если не пропускаем
+        if (!skipHistorySave) {
+            SaveCurrentState();
+        }
+        
+    } catch (const std::exception& e) {
+        ClearOutput();
+        AppendOutput("Parse error: ");
+        AppendOutput(e.what());
+        AppendOutput("\n");
+    }
+}
+
 void SyncGrammarFromDiagram() {
     if (!grammar || !drawObjects) return;
     
@@ -422,21 +443,93 @@ void SyncGrammarFromDiagram() {
     SaveCurrentState();
 }
 
-void RebuildGrammarFromText() {
-    try {
-        std::string tempFile = "temp_grammar.grm";
-        SaveTextFile(tempFile.c_str(), grammarText);
-        
-        grammar = std::make_unique<syngt::Grammar>();
-        grammar->load(tempFile);
-        std::remove(tempFile.c_str());
-        
-        UpdateDiagram();
-    } catch (const std::exception& e) {
+void Undo() {
+    if (!undoRedo.canUndo()) {
         ClearOutput();
-        AppendOutput("Rebuild Error:\n");
-        AppendOutput(e.what());
-        AppendOutput("\n");
+        AppendOutput("Nothing to undo\n");
+        return;
+    }
+    
+    if (grammar) {
+        std::vector<std::string> names;
+        std::vector<std::string> values;
+        int index = activeNTIndex;
+        syngt::SelectionMask selection = selectionMask;
+        
+        undoRedo.stepBack(names, values, index, selection);
+        
+        // Восстанавливаем текст грамматики
+        std::string restoredText;
+        for (size_t i = 0; i < names.size() && i < values.size(); ++i) {
+            restoredText += names[i] + " : " + values[i];
+            
+            // Добавляем точку если её нет
+            if (!values[i].empty() && values[i].back() != '.') {
+                restoredText += ".";
+            }
+            
+            restoredText += "\n";
+        }
+        restoredText += "EOGram!\n";
+        
+        if (restoredText.size() < sizeof(grammarText)) {
+            strcpy_s(grammarText, sizeof(grammarText), restoredText.c_str());
+        }
+        
+        activeNTIndex = index;
+        selectionMask = selection;
+        
+        skipHistorySave = true;
+        RebuildGrammarFromText();
+        skipHistorySave = false;
+        
+        ClearOutput();
+        AppendOutput("Undo successful\n");
+    }
+}
+
+void Redo() {
+    if (!undoRedo.canRedo()) {
+        ClearOutput();
+        AppendOutput("Nothing to redo\n");
+        return;
+    }
+    
+    if (grammar) {
+        std::vector<std::string> names;
+        std::vector<std::string> values;
+        int index = activeNTIndex;
+        syngt::SelectionMask selection = selectionMask;
+        
+        undoRedo.stepForward(names, values, index, selection);
+        
+        // Восстанавливаем текст грамматики
+        std::string restoredText;
+        for (size_t i = 0; i < names.size() && i < values.size(); ++i) {
+            restoredText += names[i] + " : " + values[i];
+            
+            // Добавляем точку если её нет
+            if (!values[i].empty() && values[i].back() != '.') {
+                restoredText += ".";
+            }
+            
+            restoredText += "\n";
+        }
+        restoredText += "EOGram!\n";
+        
+        if (restoredText.size() < sizeof(grammarText)) {
+            strcpy_s(grammarText, sizeof(grammarText), restoredText.c_str());
+        }
+        
+        activeNTIndex = index;
+        selectionMask = selection;
+        
+        skipHistorySave = true;
+        RebuildGrammarFromText();
+        skipHistorySave = false;
+        
+        ClearOutput();
+        AppendOutput("Redo successful\n");
     }
 }
 
@@ -798,23 +891,58 @@ void DeleteSelectedObjects() {
 }
 
 void AddTerminalToGrammar(const std::string& name) {
-    if (!grammar) return;
+    ClearOutput();
+    AppendOutput("AddTerminalToGrammar: START\n");
+    
+    if (!grammar) {
+        AppendOutput("ERROR: grammar is null\n");
+        return;
+    }
     
     auto nts = grammar->getNonTerminals();
-    if (activeNTIndex < 0 || activeNTIndex >= static_cast<int>(nts.size())) return;
+    AppendOutput("Got non-terminals list\n");
+    
+    if (activeNTIndex < 0 || activeNTIndex >= static_cast<int>(nts.size())) {
+        AppendOutput("ERROR: invalid activeNTIndex\n");
+        return;
+    }
     
     std::string text = grammarText;
     std::string ntName = nts[activeNTIndex];
     
+    char buf[512];
+    snprintf(buf, sizeof(buf), "Working on: %s\n", ntName.c_str());
+    AppendOutput(buf);
+    
+    snprintf(buf, sizeof(buf), "Grammar text:\n%s\n", text.c_str());
+    AppendOutput(buf);
+    
     size_t pos = text.find(ntName + " :");
     if (pos == std::string::npos) pos = text.find(ntName + ":");
-    if (pos == std::string::npos) return;
+    
+    if (pos == std::string::npos) {
+        AppendOutput("ERROR: cannot find rule start\n");
+        return;
+    }
+    
+    snprintf(buf, sizeof(buf), "Found rule at pos: %zu\n", pos);
+    AppendOutput(buf);
     
     size_t colonPos = text.find(":", pos);
     size_t dotPos = text.find(".", colonPos);
-    if (colonPos == std::string::npos || dotPos == std::string::npos) return;
+    
+    if (colonPos == std::string::npos || dotPos == std::string::npos) {
+        AppendOutput("ERROR: cannot find colon or dot\n");
+        return;
+    }
+    
+    snprintf(buf, sizeof(buf), "colonPos=%zu, dotPos=%zu\n", colonPos, dotPos);
+    AppendOutput(buf);
     
     std::string ruleBody = text.substr(colonPos + 1, dotPos - colonPos - 1);
+    
+    snprintf(buf, sizeof(buf), "Rule body: [%s]\n", ruleBody.c_str());
+    AppendOutput(buf);
     
     size_t epsPos = 0;
     while ((epsPos = ruleBody.find("eps", epsPos)) != std::string::npos) {
@@ -867,11 +995,21 @@ void AddTerminalToGrammar(const std::string& name) {
     
     text.replace(colonPos + 1, dotPos - colonPos - 1, newBody);
     
-    if (text.size() >= sizeof(grammarText)) return;
+    if (text.size() >= sizeof(grammarText)) {
+        AppendOutput("ERROR: text too large\n");
+        return;
+    }
     
     strcpy_s(grammarText, sizeof(grammarText), text.c_str());
+    AppendOutput("Text updated, calling RebuildGrammarFromText\n");
+    
     RebuildGrammarFromText();
+    
+    AppendOutput("Calling SaveCurrentState\n");
     SaveCurrentState();
+    
+    AppendOutput("Calling UpdateDiagram\n");
+    UpdateDiagram();
     
     ClearOutput();
     AppendOutput("Added '");
@@ -1129,6 +1267,141 @@ void AddNonTerminalToGrammar(const std::string& name) {
             AppendOutput("' with empty rule\n");
         }
     }
+}
+
+void AddNonTerminalReferenceToGrammar(const std::string& name) {
+    ClearOutput();
+    AppendOutput("AddNonTerminalReferenceToGrammar: START\n");
+    
+    if (!grammar) {
+        AppendOutput("ERROR: grammar is null\n");
+        return;
+    }
+    
+    auto nts = grammar->getNonTerminals();
+    
+    if (activeNTIndex < 0 || activeNTIndex >= static_cast<int>(nts.size())) {
+        AppendOutput("ERROR: invalid activeNTIndex\n");
+        return;
+    }
+    
+    // Проверяем что референс существует
+    if (grammar->findNonTerminal(name) < 0) {
+        AppendOutput("ERROR: non-terminal not found\n");
+        return;
+    }
+    
+    char buf[256];
+    snprintf(buf, sizeof(buf), "Adding reference to: %s\n", name.c_str());
+    AppendOutput(buf);
+    
+    std::string text = grammarText;
+    std::string ntName = nts[activeNTIndex];
+    
+    snprintf(buf, sizeof(buf), "Current rule: %s\n", ntName.c_str());
+    AppendOutput(buf);
+    
+    size_t pos = text.find(ntName + " :");
+    if (pos == std::string::npos) pos = text.find(ntName + ":");
+    if (pos == std::string::npos) {
+        AppendOutput("ERROR: cannot find rule\n");
+        return;
+    }
+    
+    size_t colonPos = text.find(":", pos);
+    size_t dotPos = text.find(".", colonPos);
+    if (colonPos == std::string::npos || dotPos == std::string::npos) {
+        AppendOutput("ERROR: cannot find colon or dot\n");
+        return;
+    }
+    
+    std::string ruleBody = text.substr(colonPos + 1, dotPos - colonPos - 1);
+    
+    snprintf(buf, sizeof(buf), "Rule body: [%s]\n", ruleBody.c_str());
+    AppendOutput(buf);
+    
+    // Удаляем eps (аналогично AddTerminalToGrammar)
+    size_t epsPos = 0;
+    while ((epsPos = ruleBody.find("eps", epsPos)) != std::string::npos) {
+        bool isStart = (epsPos == 0 || !isalnum(ruleBody[epsPos-1]));
+        bool isEnd = (epsPos + 3 >= ruleBody.length() || !isalnum(ruleBody[epsPos + 3]));
+        if (isStart && isEnd) {
+            size_t endPos = epsPos + 3;
+            while (endPos < ruleBody.length() && isspace(ruleBody[endPos])) endPos++;
+            if (endPos < ruleBody.length() && (ruleBody[endPos] == ',' || ruleBody[endPos] == ';')) {
+                endPos++;
+                while (endPos < ruleBody.length() && isspace(ruleBody[endPos])) endPos++;
+            }
+            ruleBody.erase(epsPos, endPos - epsPos);
+        } else {
+            epsPos++;
+        }
+    }
+    
+    // Trim
+    size_t start = ruleBody.find_first_not_of(" \t\n\r");
+    size_t end = ruleBody.find_last_not_of(" \t\n\r");
+    std::string trimmedBody;
+    if (start != std::string::npos && end != std::string::npos) {
+        trimmedBody = ruleBody.substr(start, end - start + 1);
+    }
+    
+    snprintf(buf, sizeof(buf), "Trimmed body: [%s]\n", trimmedBody.c_str());
+    AppendOutput(buf);
+    
+    std::string newBody;
+    
+    if (trimmedBody.empty()) {
+        // Пустое правило - просто добавляем нетерминал
+        newBody = " " + name;
+    } else if (useOrOperator) {
+        // OR - добавляем через точку с запятой
+        newBody = " " + trimmedBody + " ; " + name;
+    } else {
+        // AND - добавляем к последней альтернативе
+        size_t lastSemicolon = trimmedBody.rfind(';');
+        
+        if (lastSemicolon != std::string::npos) {
+            // Есть альтернативы - добавляем к последней
+            std::string beforeLast = trimmedBody.substr(0, lastSemicolon + 1);
+            std::string lastAlt = trimmedBody.substr(lastSemicolon + 1);
+            
+            // Trim последней альтернативы
+            size_t altStart = lastAlt.find_first_not_of(" \t\n\r");
+            if (altStart != std::string::npos) {
+                lastAlt = lastAlt.substr(altStart);
+            }
+            
+            newBody = " " + beforeLast + " " + lastAlt + ", " + name;
+        } else {
+            // Нет альтернатив - просто добавляем через запятую
+            newBody = " " + trimmedBody + ", " + name;
+        }
+    }
+    
+    snprintf(buf, sizeof(buf), "New body: [%s]\n", newBody.c_str());
+    AppendOutput(buf);
+    
+    // Заменяем
+    text.replace(colonPos + 1, dotPos - colonPos - 1, newBody);
+    
+    if (text.size() >= sizeof(grammarText)) {
+        AppendOutput("ERROR: text too large\n");
+        return;
+    }
+    
+    strcpy_s(grammarText, sizeof(grammarText), text.c_str());
+    
+    AppendOutput("Rebuilding grammar\n");
+    RebuildGrammarFromText();
+    SaveCurrentState();
+    
+    ClearOutput();
+    AppendOutput("Added reference '");
+    AppendOutput(name.c_str());
+    AppendOutput("' ");
+    AppendOutput(useOrOperator ? "(OR)" : "(AND)");
+    AppendOutput("\n");
 }
 
 // Grammar Operations
@@ -1577,8 +1850,19 @@ int main(int, char**)
 
         ImGui::BeginChild("LeftPanel", ImVec2(leftWidth, 0), true);
         
+        float leftPanelHeight = ImGui::GetContentRegionAvail().y;
+        float ruleEditorHeight = 100.0f;
+        // Вычисляем высоту верхней части в зависимости от активной вкладки
+        float upperPartHeight = (activeLeftTab == 1) 
+            ? (leftPanelHeight - ruleEditorHeight - 8)  // Для Syntax Diagram - вычитаем место под редактор
+            : leftPanelHeight;  // Для Grammar Editor - всё пространство
+        
+        ImGui::BeginChild("UpperLeftPanel", ImVec2(0, upperPartHeight), false);
+        
         if (ImGui::BeginTabBar("LeftTabs")) {
             if (ImGui::BeginTabItem("Grammar Editor")) {
+                activeLeftTab = 0;
+
                 ImGui::Text("Editor");
                 ImGui::SameLine();
                 if (ImGui::Button("Parse (F5)")) ParseGrammar();
@@ -1595,6 +1879,8 @@ int main(int, char**)
             }
             
             if (ImGui::BeginTabItem("Syntax Diagram")) {
+                activeLeftTab = 1;
+
                 if (grammar && !grammar->getNonTerminals().empty()) {
                     auto nts = grammar->getNonTerminals();
                     
@@ -1619,6 +1905,7 @@ int main(int, char**)
                             if (ImGui::Selectable(label.c_str(), is_selected)) {
                                 activeNTIndex = i;
                                 UpdateDiagram();
+                                LoadRuleToEditor();
                             }
                             if (is_selected) {
                                 ImGui::SetItemDefaultFocus();
@@ -1629,27 +1916,50 @@ int main(int, char**)
                     
                     ImGui::Separator();
                     
+                    // Диаграмма с прокруткой
                     ImGui::BeginChild("DiagramCanvas", ImVec2(0, 0), false, ImGuiWindowFlags_HorizontalScrollbar);
                     
                     if (drawObjects && drawObjects->count() > 0) {
+                        // Вычисляем изначальный размер диаграммы
                         float diagramWidth = static_cast<float>(drawObjects->width());
                         float diagramHeight = static_cast<float>(drawObjects->height());
                         
+                        // Находим реальные границы всех объектов
+                        int minX = 0, minY = 0, maxX = static_cast<int>(diagramWidth);
+                        int maxY = static_cast<int>(diagramHeight);
+                        
+                        for (int i = 0; i < drawObjects->count(); ++i) {
+                            auto* obj = (*drawObjects)[i];
+                            if (obj) {
+                                int objX = obj->x();
+                                int objY = obj->y();
+                                int objEndX = obj->endX();
+                                
+                                if (objX < minX) minX = objX;
+                                if (objY < minY) minY = objY;
+                                if (objEndX > maxX) maxX = objEndX;
+                                if (objY > maxY) maxY = objY;
+                            }
+                        }
+                        
+                        const float padding = 100.0f;
+                        float canvasWidth = maxX - minX + padding * 2;
+                        float canvasHeight = maxY - minY + padding * 2;
+                        
                         ImVec2 canvasPos = ImGui::GetCursorScreenPos();
-                        ImVec2 scrollPos = ImVec2(ImGui::GetScrollX(), ImGui::GetScrollY());
+                        ImVec2 offset = ImVec2(canvasPos.x + padding - minX, 
+                                              canvasPos.y + padding - minY);
                         
-                        ImGui::Dummy(ImVec2(diagramWidth + 40, diagramHeight + 100));
-                        
-                        ImVec2 offset = ImVec2(canvasPos.x + 20, canvasPos.y + 50);
+                        ImGui::Dummy(ImVec2(canvasWidth, canvasHeight));
                         
                         ImGui::SetCursorScreenPos(canvasPos);
-                        ImGui::InvisibleButton("##canvas", ImVec2(diagramWidth + 40, diagramHeight + 100));
+                        ImGui::InvisibleButton("##canvas", ImVec2(canvasWidth, canvasHeight));
                         bool isHovered = ImGui::IsItemHovered();
                         
                         ImVec2 mousePos = ImGui::GetMousePos();
                         
-                        // Hoving
-                        if (isHovered && !isDragging) {
+                        // Обработка наведения
+                        if (isHovered && !isDragging && !isBoxSelecting) {
                             hoveredObject = FindDrawObjectAt(mousePos, offset);
                             if (hoveredObject) {
                                 ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
@@ -1658,7 +1968,7 @@ int main(int, char**)
                             hoveredObject = nullptr;
                         }
                         
-                        // Left click
+                        // Обработка левого клика
                         if (isHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
                             syngt::graphics::DrawObject* clicked = FindDrawObjectAt(mousePos, offset);
                             
@@ -1670,18 +1980,17 @@ int main(int, char**)
                                     drawObjects->unselectAll();
                                 }
                                 drawObjects->changeSelection(clicked);
-                                
-                                ClearOutput();
-                                char buf[256];
-                                snprintf(buf, sizeof(buf), "Started dragging object at (%d,%d)\n", 
-                                         clicked->x(), clicked->y());
-                                AppendOutput(buf);
                             } else {
-                                drawObjects->unselectAll();
+                                isBoxSelecting = true;
+                                boxSelectStart = mousePos;
+                                
+                                if (!ImGui::GetIO().KeyCtrl) {
+                                    drawObjects->unselectAll();
+                                }
                             }
                         }
                         
-                        // Dragging
+                        // Обработка перетаскивания объектов
                         if (isDragging) {
                             if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
                                 ImVec2 currentMousePos = ImGui::GetMousePos();
@@ -1700,18 +2009,48 @@ int main(int, char**)
                                 lastMousePos = currentMousePos;
                             } else {
                                 isDragging = false;
-                                ClearOutput();
-                                AppendOutput("Drag completed\n");
                             }
                         }
                         
-                        // Right click
+                        // Обработка выделения областью
+                        if (isBoxSelecting) {
+                            if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+                                ImVec2 boxSelectEnd = ImGui::GetMousePos();
+                                
+                                int left = static_cast<int>(std::min(boxSelectStart.x, boxSelectEnd.x) - offset.x);
+                                int top = static_cast<int>(std::min(boxSelectStart.y, boxSelectEnd.y) - offset.y);
+                                int right = static_cast<int>(std::max(boxSelectStart.x, boxSelectEnd.x) - offset.x);
+                                int bottom = static_cast<int>(std::max(boxSelectStart.y, boxSelectEnd.y) - offset.y);
+                                
+                                if (drawObjects) {
+                                    for (int i = 0; i < drawObjects->count(); ++i) {
+                                        auto* obj = (*drawObjects)[i];
+                                        if (obj) {
+                                            int objX = obj->x();
+                                            int objY = obj->y();
+                                            
+                                            if (objX >= left && objX <= right && objY >= top && objY <= bottom) {
+                                                if (ImGui::GetIO().KeyCtrl) {
+                                                    drawObjects->changeSelection(obj);
+                                                } else {
+                                                    obj->setSelected(true);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                
+                                isBoxSelecting = false;
+                            }
+                        }
+                        
+                        // Обработка правого клика
                         if (isHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
                             contextMenuObject = FindDrawObjectAt(mousePos, offset);
                             ImGui::OpenPopup("DiagramContextMenu");
                         }
-
-                        // Context menu
+                        
+                        // Контекстное меню
                         if (ImGui::BeginPopup("DiagramContextMenu")) {
                             if (contextMenuObject) {
                                 if (ImGui::MenuItem("Edit Symbol")) {
@@ -1762,68 +2101,74 @@ int main(int, char**)
                             ImGui::EndPopup();
                         }
                         
-                        // Diagram render
+                        // Рендеринг диаграммы
                         ImDrawList* drawList = ImGui::GetWindowDrawList();
-                        ImVec2 clipMin = ImVec2(canvasPos.x, canvasPos.y);
-                        ImVec2 clipMax = ImVec2(canvasPos.x + ImGui::GetContentRegionAvail().x, 
-                                               canvasPos.y + ImGui::GetContentRegionAvail().y);
-                        drawList->PushClipRect(clipMin, clipMax, true);
+                        ImVec2 childSize = ImGui::GetWindowSize();
+                        ImVec2 clipMin = canvasPos;
+                        ImVec2 clipMax = ImVec2(canvasPos.x + childSize.x, canvasPos.y + childSize.y);
                         
-                        // Background
+                        drawList->PushClipRect(clipMin, clipMax, true);
                         drawList->AddRectFilled(clipMin, clipMax, IM_COL32(30, 30, 35, 255));
                         
                         RenderDiagram(drawList, offset);
                         
+                        // Рисуем прямоугольник выделения
+                        if (isBoxSelecting && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+                            ImVec2 currentMouse = ImGui::GetMousePos();
+                            ImVec2 rectMin = ImVec2(
+                                std::min(boxSelectStart.x, currentMouse.x),
+                                std::min(boxSelectStart.y, currentMouse.y)
+                            );
+                            ImVec2 rectMax = ImVec2(
+                                std::max(boxSelectStart.x, currentMouse.x),
+                                std::max(boxSelectStart.y, currentMouse.y)
+                            );
+                            
+                            drawList->AddRectFilled(rectMin, rectMax, IM_COL32(100, 150, 255, 50));
+                            drawList->AddRect(rectMin, rectMax, IM_COL32(100, 150, 255, 200), 0.0f, 0, 2.0f);
+                        }
+                        
                         drawList->PopClipRect();
                         
-                        // Selection info
+                        // Информация о выделении
                         int selectedCount = 0;
                         for (int i = 0; i < drawObjects->count(); ++i) {
                             if ((*drawObjects)[i]->selected()) {
                                 selectedCount++;
                             }
                         }
+                        
                         if (selectedCount > 0) {
-                            ImVec2 infoPos = ImVec2(canvasPos.x + 10, canvasPos.y + ImGui::GetContentRegionAvail().y - 30);
-                            ImGui::SetCursorScreenPos(infoPos);
-                            ImGui::Text("Selected: %d", selectedCount);
+                            ImVec2 windowPos = ImGui::GetWindowPos();
+                            ImVec2 windowSize = ImGui::GetWindowSize();
+                            ImVec2 infoPos = ImVec2(windowPos.x + 10, windowPos.y + windowSize.y - 35);
+                            
+                            char labelBuf[64];
+                            snprintf(labelBuf, sizeof(labelBuf), "Selected: %d", selectedCount);
+                            ImVec2 textSize = ImGui::CalcTextSize(labelBuf);
+                            ImVec2 buttonSize = ImGui::CalcTextSize("Deselect");
+                            
+                            float frameHeight = textSize.y + ImGui::GetStyle().FramePadding.y * 2;
+                            float totalWidth = textSize.x + buttonSize.x + ImGui::GetStyle().ItemSpacing.x + 20;
+                            
+                            ImDrawList* infoDrawList = ImGui::GetWindowDrawList();
+                            infoDrawList->AddRectFilled(
+                                ImVec2(infoPos.x - 8, infoPos.y - 6),
+                                ImVec2(infoPos.x + totalWidth, infoPos.y + frameHeight + 4),
+                                IM_COL32(20, 20, 25, 220),
+                                4.0f
+                            );
+                            
+                            ImGui::SetCursorScreenPos(ImVec2(infoPos.x, infoPos.y));
+                            ImGui::Text("%s", labelBuf);
                             ImGui::SameLine();
                             if (ImGui::SmallButton("Deselect")) {
                                 drawObjects->unselectAll();
                             }
                         }
+                        
                     } else {
-                        // Reason for no diagram
-                        auto nts = grammar->getNonTerminals();
-                        if (activeNTIndex >= 0 && activeNTIndex < static_cast<int>(nts.size())) {
-                            std::string activeNT = nts[activeNTIndex];
-                            
-                            ImGui::TextWrapped("No diagram for '%s'", activeNT.c_str());
-                            ImGui::Separator();
-                            
-                            syngt::NTListItem* item = grammar->getNTItem(activeNT);
-                            if (!item) {
-                                ImGui::TextWrapped("Rule not found in grammar.");
-                            } else if (!item->hasRoot()) {
-                                ImGui::TextWrapped("Rule contains only 'eps' (empty production).");
-                                ImGui::Separator();
-                                if (ImGui::Button("Add Terminal")) {
-                                    showAddTerminalDialog = true;
-                                    useOrOperator = false;
-                                    newSymbolName[0] = '\0';
-                                }
-                                ImGui::SameLine();
-                                if (ImGui::Button("Add Reference")) {
-                                    showAddReferenceDialog = true;
-                                    useOrOperator = false;
-                                    newSymbolName[0] = '\0';
-                                }
-                            } else {
-                                ImGui::TextWrapped("Unknown diagram error.");
-                            }
-                        } else {
-                            ImGui::Text("No diagram to display. Parse grammar first.");
-                        }
+                        ImGui::Text("No diagram to display. Parse grammar first.");
                     }
                     
                     ImGui::EndChild();
@@ -1837,6 +2182,44 @@ int main(int, char**)
             ImGui::EndTabBar();
         }
         
+        ImGui::EndChild(); // Конец UpperLeftPanel
+        
+        // Показываем splitter и редактор только для Syntax Diagram
+        if (activeLeftTab == 1) {  // ДОБАВИТЬ УСЛОВИЕ
+            // Горизонтальный splitter между верхней и нижней частью левой панели
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.3f, 0.3f, 0.3f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.4f, 0.4f, 0.4f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.5f, 0.5f, 0.5f, 1.0f));
+            ImGui::Button("##left_hsplitter", ImVec2(-1, 8.0f));
+            bool leftHsplitterActive = ImGui::IsItemActive();
+            bool leftHsplitterHovered = ImGui::IsItemHovered();
+            ImGui::PopStyleColor(3);
+            
+            if (leftHsplitterActive) {
+                ruleEditorHeight -= ImGui::GetIO().MouseDelta.y;
+                if (ruleEditorHeight < 60.0f) ruleEditorHeight = 60.0f;
+                if (ruleEditorHeight > leftPanelHeight - 200.0f) ruleEditorHeight = leftPanelHeight - 200.0f;
+            }
+            if (leftHsplitterHovered) {
+                ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
+            }
+            
+            // Нижняя часть левой панели - редактор правила
+            ImGui::BeginChild("RuleEditor", ImVec2(0, 0), true);
+            ImGui::Text("Rule definition:");
+            ImGui::PushItemWidth(-FLT_MIN);
+            if (ImGui::InputText("##rule_edit", ruleText, sizeof(ruleText), 
+                                ImGuiInputTextFlags_EnterReturnsTrue)) {
+                BuildRule();
+            }
+            ImGui::PopItemWidth();
+            
+            if (ImGui::Button("Build (Apply Changes)", ImVec2(-FLT_MIN, 0))) {
+                BuildRule();
+            }
+            ImGui::EndChild();
+        }  // ЗАКРЫТЬ УСЛОВИЕ
+
         ImGui::EndChild();
 
         ImGui::SameLine();
@@ -1995,6 +2378,37 @@ int main(int, char**)
             ImGui::EndPopup();
         }
 
+        // Add Reference Dialog
+        if (showAddReferenceDialog) {
+            ImGui::OpenPopup("Add Non-Terminal Reference");
+            showAddReferenceDialog = false;
+        }
+        
+        if (ImGui::BeginPopupModal("Add Non-Terminal Reference", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::Text("Select non-terminal to reference:");
+            ImGui::Separator();
+            
+            if (grammar) {
+                auto nts = grammar->getNonTerminals();
+                
+                // Показываем список существующих нетерминалов
+                for (const auto& nt : nts) {
+                    if (ImGui::Selectable(nt.c_str())) {
+                        // Выбрали нетерминал для референса
+                        AddNonTerminalReferenceToGrammar(nt);
+                        ImGui::CloseCurrentPopup();
+                    }
+                }
+            }
+            
+            ImGui::Separator();
+            if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+                ImGui::CloseCurrentPopup();
+            }
+            
+            ImGui::EndPopup();
+        }
+
         // About dialog
         if (showAbout) {
             ImGui::OpenPopup("About");
@@ -2053,6 +2467,45 @@ int main(int, char**)
     ::UnregisterClassW(wc.lpszClassName, wc.hInstance);
 
     return 0;
+}
+
+void BuildRule() {
+    if (!grammar) return;
+    
+    auto nts = grammar->getNonTerminals();
+    if (activeNTIndex < 0 || activeNTIndex >= static_cast<int>(nts.size())) return;
+    
+    std::string ntName = nts[activeNTIndex];
+    std::string newRule = ruleText;
+    
+    // Находим правило в тексте грамматики
+    std::string text = grammarText;
+    size_t pos = text.find(ntName + " :");
+    if (pos == std::string::npos) pos = text.find(ntName + ":");
+    if (pos == std::string::npos) return;
+    
+    size_t colonPos = text.find(":", pos);
+    size_t dotPos = text.find(".", colonPos);
+    if (colonPos == std::string::npos || dotPos == std::string::npos) return;
+    
+    // Убираем точку из newRule если она есть
+    if (!newRule.empty() && newRule.back() == '.') {
+        newRule.pop_back();
+    }
+    
+    // Заменяем
+    text.replace(colonPos + 1, dotPos - colonPos - 1, " " + newRule);
+    
+    if (text.size() < sizeof(grammarText)) {
+        strcpy_s(grammarText, sizeof(grammarText), text.c_str());
+        RebuildGrammarFromText();
+        SaveCurrentState();
+        
+        ClearOutput();
+        AppendOutput("Rule updated for '");
+        AppendOutput(ntName.c_str());
+        AppendOutput("'\n");
+    }
 }
 
 // DirectX Helper functions
