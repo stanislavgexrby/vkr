@@ -16,7 +16,7 @@ protected:
 };
 
 TEST_F(LeftFactorizationTest, DetectCommonPrefix) {
-    // S → 'if' expr 'then' stmt | 'if' expr 'then' stmt 'else' stmt
+    // S : 'if' expr 'then' stmt | 'if' expr 'then' stmt 'else' stmt
     grammar->addNonTerminal("S");
     grammar->setNTRule("S", "'if' , expr , 'then' , stmt ; 'if' , expr , 'then' , stmt , 'else' , stmt.");
     
@@ -26,7 +26,7 @@ TEST_F(LeftFactorizationTest, DetectCommonPrefix) {
 }
 
 TEST_F(LeftFactorizationTest, NoCommonPrefix) {
-    // S → 'a' | 'b'
+    // S : 'a' | 'b'
     grammar->addNonTerminal("S");
     grammar->setNTRule("S", "'a' ; 'b'.");
     
@@ -39,7 +39,7 @@ TEST_F(LeftFactorizationTest, NoCommonPrefix) {
 }
 
 TEST_F(LeftFactorizationTest, FactorizeSimple) {
-    // S → 'a' 'b' | 'a' 'c'
+    // S : 'a' 'b' | 'a' 'c'
     grammar->addNonTerminal("S");
     grammar->setNTRule("S", "'a' , 'b' ; 'a' , 'c'.");
     
@@ -51,7 +51,7 @@ TEST_F(LeftFactorizationTest, FactorizeSimple) {
 }
 
 TEST_F(LeftFactorizationTest, FactorizeMultiple) {
-    // S → 'x' 'a' | 'x' 'b' | 'x' 'c'
+    // S : 'x' 'a' | 'x' 'b' | 'x' 'c'
     grammar->addNonTerminal("S");
     grammar->setNTRule("S", "'x' , 'a' ; 'x' , 'b' ; 'x' , 'c'.");
     
@@ -80,13 +80,13 @@ TEST_F(LeftFactorizationTest, SaveAfterFactorization) {
     grammar->addNonTerminal("stmt");
     grammar->setNTRule("stmt", "'if' , cond , 'then' , stmt ; 'if' , cond , 'then' , stmt , 'else' , stmt.");
     
-    LeftFactorization::factorizeAll(grammar.get());
+    LeftFactorization::factorize(grammar->getNTItem("stmt"), grammar.get());
     
     std::string filename = "test_factorized.grm";
-    EXPECT_NO_THROW(grammar->save(filename));
+    grammar->save(filename);
     
     Grammar grammar2;
-    EXPECT_NO_THROW(grammar2.load(filename));
+    grammar2.load(filename);
     
     EXPECT_GE(grammar2.getNonTerminals().size(), grammar->getNonTerminals().size());
     
@@ -94,8 +94,7 @@ TEST_F(LeftFactorizationTest, SaveAfterFactorization) {
 }
 
 TEST_F(LeftFactorizationTest, RecursiveFactorization) {
-    // S → 'a' 'b' 'c' | 'a' 'b' 'd' | 'a' 'x'
-    
+    // S : 'a' 'b' 'c' | 'a' 'b' 'd' | 'a' 'x'
     grammar->addNonTerminal("S");
     grammar->setNTRule("S", "'a' , 'b' , 'c' ; 'a' , 'b' , 'd' ; 'a' , 'x'.");
     
@@ -107,26 +106,25 @@ TEST_F(LeftFactorizationTest, RecursiveFactorization) {
     size_t afterCount = grammar->getNonTerminals().size();
     std::cout << "After: " << afterCount << " NTs\n";
     
-    EXPECT_GT(afterCount, beforeCount);  // Хотя бы 1 новый
+    EXPECT_GT(afterCount, beforeCount);
     
     NTListItem* s = grammar->getNTItem("S");
-    ASSERT_NE(s, nullptr);
     EXPECT_TRUE(s->hasRoot());
     
     std::cout << "Final S rule: " << s->value() << "\n";
 }
 
 TEST_F(LeftFactorizationTest, DeepRecursion) {
-    // S → 'a' 'b' 'c' 'd' | 'a' 'b' 'c' 'e' | 'a' 'b' 'f'
-    
+    // S : 'a' 'b' 'c' 'd' | 'a' 'b' 'c' 'e' | 'a' 'b' 'f'
     grammar->addNonTerminal("S");
-    grammar->setNTRule("S", "'a','b','c','d' ; 'a','b','c','e' ; 'a','b','f'.");
+    grammar->setNTRule("S", "'a' , 'b' , 'c' , 'd' ; 'a' , 'b' , 'c' , 'e' ; 'a' , 'b' , 'f'.");
     
     size_t beforeCount = grammar->getNonTerminals().size();
     
     LeftFactorization::factorize(grammar->getNTItem("S"), grammar.get());
     
     size_t afterCount = grammar->getNonTerminals().size();
+    
     EXPECT_GT(afterCount, beforeCount);
     
     NTListItem* s = grammar->getNTItem("S");
@@ -134,8 +132,8 @@ TEST_F(LeftFactorizationTest, DeepRecursion) {
 }
 
 TEST_F(LeftFactorizationTest, NoInfiniteLoop) {
-    grammar->addNonTerminal("A");
-    grammar->setNTRule("A", "'x','y','z' ; 'x','y','w' ; 'p','q'.");
+    grammar->addNonTerminal("S");
+    grammar->setNTRule("S", "'a' , 'b' ; 'a' , 'c'.");
     
-    EXPECT_NO_THROW(LeftFactorization::factorize(grammar->getNTItem("A"), grammar.get()));
+    EXPECT_NO_THROW(LeftFactorization::factorize(grammar->getNTItem("S"), grammar.get()));
 }

@@ -16,9 +16,9 @@ protected:
 };
 
 TEST_F(RemoveUselessTest, RemoveUnreachable) {
-    // S → A
-    // A → 'a'
-    // B → 'b'
+    // S : A
+    // A : 'a'
+    // B : 'b'
     
     grammar->addNonTerminal("A");
     grammar->addNonTerminal("B");
@@ -36,8 +36,8 @@ TEST_F(RemoveUselessTest, RemoveUnreachable) {
 }
 
 TEST_F(RemoveUselessTest, RemoveNonProductive) {
-    // S → A
-    // A → B
+    // S : A
+    // A : B
     
     grammar->addNonTerminal("A");
     grammar->setNTRule("S", "A.");
@@ -52,8 +52,8 @@ TEST_F(RemoveUselessTest, RemoveNonProductive) {
 }
 
 TEST_F(RemoveUselessTest, KeepProductive) {
-    // S → A
-    // A → 'a'
+    // S : A
+    // A : 'a'
     
     grammar->addNonTerminal("A");
     grammar->setNTRule("S", "A.");
@@ -69,11 +69,11 @@ TEST_F(RemoveUselessTest, KeepProductive) {
 }
 
 TEST_F(RemoveUselessTest, ComplexGrammar) {
-    // S → A B
-    // A → 'a'
-    // B → 'b'
-    // C → 'c'
-    // D → E
+    // S : A B
+    // A : 'a'
+    // B : 'b'
+    // C : 'c'
+    // D : E
     
     grammar->addNonTerminal("A");
     grammar->addNonTerminal("B");

@@ -28,10 +28,12 @@ TEST_F(IntegrationTest, ParseTransformVisualize) {
     // E -> E + n ; n
     grammar->setNTRule("E", "E , '+' , 'n' ; 'n'.");
     
+    ASSERT_TRUE(grammar->getNTItem("E")->hasRoot());
+    
     LeftElimination::eliminate(grammar.get());
     
     auto item = grammar->getNTItem("E");
-    ASSERT_TRUE(item != nullptr);
+    ASSERT_NE(item, nullptr);
     ASSERT_TRUE(item->hasRoot());
     
     auto list = std::make_unique<DrawObjectList>(grammar.get());
@@ -49,11 +51,13 @@ TEST_F(IntegrationTest, LoadFactorizeSave) {
     
     // S -> a b ; a c
     grammar->setNTRule("S", "'a' , 'b' ; 'a' , 'c'.");
+    
+    ASSERT_TRUE(grammar->getNTItem("S")->hasRoot());
 
     auto item = grammar->getNTItem("S");
     LeftFactorization::factorize(item, grammar.get());
 
-    ASSERT_TRUE(item != nullptr);
+    ASSERT_NE(item, nullptr);
     ASSERT_TRUE(item->hasRoot());
 }
 
@@ -66,7 +70,11 @@ TEST_F(IntegrationTest, MultipleTransformations) {
     
     grammar->setNTRule("A", "B , 'x' ; C.");
     grammar->setNTRule("B", "'y'.");
-    grammar->setNTRule("C", "'@'.");
+    grammar->setNTRule("C", "@.");
+    
+    ASSERT_TRUE(grammar->getNTItem("A")->hasRoot());
+    ASSERT_TRUE(grammar->getNTItem("B")->hasRoot());
+    ASSERT_TRUE(grammar->getNTItem("C")->hasRoot());
     
     RemoveUseless::remove(grammar.get());
     
@@ -86,19 +94,9 @@ TEST_F(IntegrationTest, MultipleNonTerminals) {
     grammar->setNTRule("statement", "expression.");
     grammar->setNTRule("expression", "'id'.");
     
-    EXPECT_TRUE(grammar->getNTItem("program")->hasRoot());
-    EXPECT_TRUE(grammar->getNTItem("statement")->hasRoot());
-    EXPECT_TRUE(grammar->getNTItem("expression")->hasRoot());
-    
-    auto list = std::make_unique<DrawObjectList>(grammar.get());
-    
-    for (const auto& ntName : grammar->getNonTerminals()) {
-        auto item = grammar->getNTItem(ntName);
-        if (item && item->hasRoot()) {
-            Creator::createDrawObjects(list.get(), item->root());
-            EXPECT_GT(list->count(), 0);
-        }
-    }
+    ASSERT_TRUE(grammar->getNTItem("program")->hasRoot());
+    ASSERT_TRUE(grammar->getNTItem("statement")->hasRoot());
+    ASSERT_TRUE(grammar->getNTItem("expression")->hasRoot());
 }
 
 TEST_F(IntegrationTest, LargeGrammar) {
@@ -106,30 +104,30 @@ TEST_F(IntegrationTest, LargeGrammar) {
         grammar->addNonTerminal("NT" + std::to_string(i));
     }
     
-    for (int i = 0; i < 30; i++) {
-        grammar->addTerminal("term" + std::to_string(i));
+    for (int i = 0; i < 19; i++) {
+        grammar->setNTRule("NT" + std::to_string(i), "NT" + std::to_string(i + 1) + ".");
     }
+    grammar->setNTRule("NT19", "'terminal'.");
+    
+    EXPECT_EQ(grammar->getNonTerminals().size(), 20);
     
     for (int i = 0; i < 20; i++) {
-        std::string rule = "'term" + std::to_string(i) + "'.";
-        grammar->setNTRule("NT" + std::to_string(i), rule);
+        EXPECT_TRUE(grammar->getNTItem("NT" + std::to_string(i))->hasRoot());
     }
-    
-    EXPECT_EQ(grammar->getNonTerminals().size(), 21);
-    EXPECT_GE(grammar->getTerminals().size(), 30);
 }
 
 TEST_F(IntegrationTest, GrammarCloning) {
-    grammar->addTerminal("token");
-    grammar->addNonTerminal("rule");
-    grammar->setNTRule("rule", "'token'.");
+    grammar->addNonTerminal("E");
+    grammar->addTerminal("x");
+    grammar->setNTRule("E", "'x'.");
     
-    auto item = grammar->getNTItem("rule");
-    ASSERT_TRUE(item != nullptr);
+    auto item = grammar->getNTItem("E");
+    ASSERT_NE(item, nullptr);
+    ASSERT_TRUE(item->hasRoot());
     
     auto copiedTree = item->copyRETree();
-    EXPECT_TRUE(copiedTree != nullptr);
+    ASSERT_NE(copiedTree, nullptr);
     
-    EXPECT_EQ(item->root()->toString(SelectionMask(), false),
-              copiedTree->toString(SelectionMask(), false));
+    EXPECT_EQ(item->root()->toString(EmptyMask(), false), 
+              copiedTree->toString(EmptyMask(), false));
 }

@@ -38,7 +38,7 @@ std::string RETerminal::toString(const SelectionMask& mask, bool reverse) const 
     
     std::string name = getNameFromID();
     
-    if (m_id == 0 || name.empty()) {
+    if (name.empty()) {
         return "@";
     }
 

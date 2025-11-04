@@ -16,7 +16,7 @@ protected:
 };
 
 TEST_F(LeftEliminationTest, DetectDirectLeftRecursion) {
-    // E → E '+' term | term
+    // E : E '+' term | term
     grammar->addNonTerminal("E");
     grammar->setNTRule("E", "E , '+' , term ; term.");
     
@@ -28,7 +28,7 @@ TEST_F(LeftEliminationTest, DetectDirectLeftRecursion) {
 }
 
 TEST_F(LeftEliminationTest, NoLeftRecursion) {
-    // E → term '+' E | term
+    // E : term '+' E | term
     grammar->addNonTerminal("E");
     grammar->setNTRule("E", "term , '+' , E ; term.");
     
@@ -40,7 +40,7 @@ TEST_F(LeftEliminationTest, NoLeftRecursion) {
 }
 
 TEST_F(LeftEliminationTest, EliminateSimpleLeftRecursion) {
-    // E → E '+' term | term
+    // E : E '+' term | term
     grammar->addNonTerminal("E");
     grammar->addNonTerminal("term");
     grammar->setNTRule("E", "E , '+' , term ; term.");
@@ -63,7 +63,7 @@ TEST_F(LeftEliminationTest, EliminateSimpleLeftRecursion) {
 }
 
 TEST_F(LeftEliminationTest, EliminateMultipleAlternatives) {
-    // E → E '+' | E '-' | num
+    // E : E '+' | E '-' | num
     grammar->addNonTerminal("E");
     grammar->setNTRule("E", "E , '+' ; E , '-' ; num.");
     
