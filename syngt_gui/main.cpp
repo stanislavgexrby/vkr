@@ -281,15 +281,17 @@ void RenderDiagram(ImDrawList* drawList, const ImVec2& offset) {
                 drawList->AddLine(fromPos, toPos, currentColor, thickness);
                 
                 int ward = arrow->ward();
-                
-                if (ward == syngt::graphics::cwFORWARD || ward == 1) {
-                    DrawArrowhead(drawList, fromPos, toPos, currentColor);
-                } else if (ward == syngt::graphics::cwBACKWARD || ward == 2) {
-                    DrawArrowhead(drawList, toPos, fromPos, currentColor);
-                } else if (ward < 0) {
+                float dy = toPos.y - fromPos.y;
+
+                if (ward == 1) {  // FORWARD
+                    if (dy < -5) {
+                        DrawArrowhead(drawList, toPos, fromPos, currentColor);
+                    } else {
+                        DrawArrowhead(drawList, fromPos, toPos, currentColor);
+                    }
+                } else if (ward == 2 || ward < 0) {  // BACKWARD
                     DrawArrowhead(drawList, toPos, fromPos, currentColor);
                 }
-                // ward == 0 (cwNONE)
             }
         }
         
@@ -310,13 +312,16 @@ void RenderDiagram(ImDrawList* drawList, const ImVec2& offset) {
                         drawList->AddLine(fromPos, toPos, currentColor, thickness);
                         
                         int ward = arrow2->ward();
+                        float dy = toPos.y - fromPos.y;
                         
-                        if (ward == syngt::graphics::cwFORWARD || ward == 1) {
-                            DrawArrowhead(drawList, fromPos, toPos, currentColor);
-                        } else if (ward == syngt::graphics::cwBACKWARD || ward == 2) {
-                            DrawArrowhead(drawList, fromPos,toPos, currentColor);
-                        } else if (ward < 0) {
-                            DrawArrowhead(drawList, fromPos,toPos, currentColor);
+                        if (ward == 1) {  // FORWARD
+                            if (dy < -5) {
+                                DrawArrowhead(drawList, toPos, fromPos, currentColor);
+                            } else {
+                                DrawArrowhead(drawList, fromPos, toPos, currentColor);
+                            }
+                        } else if (ward == 2 || ward < 0) {  // BACKWARD
+                            DrawArrowhead(drawList, toPos, fromPos, currentColor);
                         }
                     }
                 }

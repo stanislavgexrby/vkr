@@ -24,11 +24,7 @@ cd vkr
 ```bash
 ./setup.bat
 ```
-
-# Build and run
-```bash
-./run.bat
-```
+Next steps will be shown
 
 # Usage
 In GUI press help
