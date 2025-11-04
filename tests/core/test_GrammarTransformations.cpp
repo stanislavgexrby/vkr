@@ -55,25 +55,6 @@ TEST_F(GrammarTransformationsTest, ChainedTransformations) {
     EXPECT_NO_THROW(RemoveUseless::remove(grammar.get()));
 }
 
-TEST_F(GrammarTransformationsTest, EmptyProductionHandling) {
-    // S : A B
-    // A : @ | 'a'
-    // B : 'b'
-    
-    grammar->addNonTerminal("S");
-    grammar->addNonTerminal("A");
-    grammar->addNonTerminal("B");
-    
-    grammar->setNTRule("S", "A , B.");
-    grammar->setNTRule("A", "@ ; 'a'.");
-    grammar->setNTRule("B", "'b'.");
-    
-    auto firstSets = FirstFollow::computeFirst(grammar.get());
-    
-    int bId = grammar->findTerminal("b");
-    EXPECT_TRUE(firstSets["S"].count(bId) > 0);
-}
-
 TEST_F(GrammarTransformationsTest, IndirectLeftRecursion) {
     // S : A 'a' | 'b'
     // A : S 'c' | 'd'

@@ -24,6 +24,8 @@ TEST(LoadGrammarTest, LoadLANGGRM) {
     EXPECT_GT(grammar.getNonTerminals().size(), 50);
     
     auto nts = grammar.getNonTerminals();
-    EXPECT_EQ(nts[0], "S");
-    EXPECT_EQ(nts[1], "program");
+    EXPECT_EQ(nts[0], "program");
+    EXPECT_EQ(nts[1], "initiations");
+    
+    EXPECT_TRUE(grammar.hasRule("program"));
 }

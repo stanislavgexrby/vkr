@@ -2,6 +2,7 @@
 #include <syngt/core/Grammar.h>
 #include <syngt/parser/Parser.h>
 #include <syngt/regex/RETree.h>
+#include <iostream>
 
 namespace syngt {
 
@@ -48,8 +49,10 @@ void NTListItem::setRootFromValue() {
         try {
             Parser parser;
             m_root = parser.parse(m_value, m_grammar);
-        } catch (...) {
-            m_root.reset();
+        } catch (const std::exception& e) {
+            std::cerr << "Failed to parse rule for '" << m_name << "': " << e.what() << "\n";
+            std::cerr << "  Rule was: " << m_value << "\n";
+            throw;
         }
     }
 }

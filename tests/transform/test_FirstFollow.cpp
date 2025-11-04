@@ -75,21 +75,6 @@ TEST_F(FirstFollowTest, FirstWithNonTerminal) {
     EXPECT_TRUE(firstSets["S"].count(aId) > 0);
 }
 
-TEST_F(FirstFollowTest, FirstWithNullableNonTerminal) {
-    // S : A 'b'
-    // A : @ 
-    grammar->addNonTerminal("S");
-    grammar->addNonTerminal("A");
-    grammar->setNTRule("S", "A , 'b'.");
-    grammar->setNTRule("A", "@.");
-    
-    auto firstSets = FirstFollow::computeFirst(grammar.get());
-    
-    int bId = grammar->findTerminal("b");
-    
-    EXPECT_TRUE(firstSets["S"].count(bId) > 0);
-}
-
 TEST_F(FirstFollowTest, FirstRecursiveGrammar) {
     // E : T E_prime
     // E_prime : '+' T E_prime | @

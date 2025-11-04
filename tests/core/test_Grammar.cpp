@@ -90,8 +90,6 @@ TEST(GrammarTest, LoadRegularizeSave) {
     
     EXPECT_NO_THROW(grammar.load(filename));
     
-    size_t originalNTs = grammar.getNonTerminals().size();
-    
     EXPECT_NO_THROW(grammar.regularize());
     
     std::string outFilename = "LANG_regularized.grm";

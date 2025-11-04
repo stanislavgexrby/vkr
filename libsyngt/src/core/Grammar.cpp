@@ -28,6 +28,7 @@ void Grammar::fillNew() {
     m_semantics = std::make_unique<SemanticList>();
     
     m_nonTerminals = std::make_unique<NonTerminalList>();
+    m_nonTerminals->setGrammar(this);
     
     m_macros = std::make_unique<MacroList>();
 }
