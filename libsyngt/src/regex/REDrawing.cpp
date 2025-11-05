@@ -18,7 +18,6 @@ namespace syngt {
 
 using namespace graphics;
 
-// Вспомогательная функция для создания стрелки
 static std::unique_ptr<Arrow> makeArrowForwardAlways(
     DrawObject* fromDO,
     int ward,
@@ -42,7 +41,7 @@ static std::unique_ptr<Arrow> makeArrowForwardAlways(
     }
 }
 
-// RETree::drawObjectsToRight - базовая реализация
+// RETree::drawObjectsToRight
 DrawObject* RETree::drawObjectsToRight(
     DrawObjectList* list,
     SemanticIDList*& semantics,
@@ -66,7 +65,7 @@ DrawObject* RETerminal::drawObjectsToRight(
     int& height
 ) const {
     if (m_id != 0) {
-        height = NS_Radius;
+        height = NS_Radius * 2;
     } else {
         height = 0;
     }
@@ -232,14 +231,12 @@ DrawObject* REOr::drawObjectsToRight(
     
     DrawObject* finalPoint = currentPoint;
     
-    int totalHeight = 0;
-    for (size_t i = 0; i < branchHeights.size(); ++i) {
-        totalHeight += branchHeights[i];
-        if (i < branchHeights.size() - 1) {
-            totalHeight += 20;
-        }
+    int lastBranchY = baseY;
+    for (size_t i = 0; i < branchHeights.size() - 1; ++i) {
+        int spacing = std::max(branchHeights[i] + 20, minVerticalSpacing);
+        lastBranchY += spacing;
     }
-    height = totalHeight;
+    height = (lastBranchY - baseY) + branchHeights.back() + 20;
 
     return finalPoint;
 }
@@ -358,7 +355,7 @@ DrawObject* RENonTerminal::drawObjectsToRight(
         }
     }
     
-    height = NS_Radius;
+    height = NS_Radius * 2;
     
     auto nonTerminal = std::make_unique<DrawObjectNonTerminal>(m_grammar, m_id);
     nonTerminal->setInArrow(makeArrowForwardAlways(fromDO, ward, semantics));

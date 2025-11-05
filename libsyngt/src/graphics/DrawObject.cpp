@@ -196,7 +196,6 @@ std::string DrawObjectNonTerminal::getNameFromGrammar() const {
 DrawObjectMacro::DrawObjectMacro(Grammar* grammar, int id)
     : DrawObjectNonTerminal(grammar, id)
 {
-    // Длина устанавливается в родительском конструкторе DrawObjectNonTerminal
 }
 
 std::string DrawObjectMacro::getNameFromGrammar() const {
@@ -272,8 +271,20 @@ void DrawObjectList::selectedMove(int dx, int dy) {
             m_items[id]->move(dx, dy);
         }
     }
+    
+    if (count() > 0) {
+        int maxX = 0, maxY = 0;
+        for (int i = 0; i < count(); ++i) {
+            auto* obj = m_items[i].get();
+            int objEndX = obj->endX();
+            int objY = obj->y();
+            if (objEndX > maxX) maxX = objEndX;
+            if (objY > maxY) maxY = objY;
+        }
+        m_width = maxX + 50;
+        m_height = maxY + 50;
+    }
 }
-
 void DrawObjectList::unselectAll() {
     for (auto& obj : m_items) {
         obj->setSelected(false);

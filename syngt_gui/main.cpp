@@ -2011,12 +2011,13 @@ int main(int, char**)
                     ImGui::BeginChild("DiagramCanvas", ImVec2(0, 0), false, ImGuiWindowFlags_HorizontalScrollbar);
                     
                     if (drawObjects && drawObjects->count() > 0) {
-                        float diagramWidth = static_cast<float>(drawObjects->width());
-                        float diagramHeight = static_cast<float>(drawObjects->height());
+                        // float diagramWidth = static_cast<float>(drawObjects->width());
+                        // float diagramHeight = static_cast<float>(drawObjects->height());
                         
-                        int minX = 0, minY = 0, maxX = static_cast<int>(diagramWidth);
-                        int maxY = static_cast<int>(diagramHeight);
-                        
+                        // int minX = 0, minY = 0, maxX = static_cast<int>(diagramWidth);
+                        // int maxY = static_cast<int>(diagramHeight);
+                        int minX = INT_MAX, minY = INT_MAX, maxX = 0, maxY = 0;
+
                         for (int i = 0; i < drawObjects->count(); ++i) {
                             auto* obj = (*drawObjects)[i];
                             if (obj) {
@@ -2039,17 +2040,22 @@ int main(int, char**)
                                 if (objEndY > maxY) maxY = objEndY;
                             }
                         }
-                        
+
+                        if (minX == INT_MAX) minX = 0;
+                        if (minY == INT_MAX) minY = 0;
+                        if (maxX < minX) maxX = minX + 100;
+                        if (maxY < minY) maxY = minY + 100;
+
                         const float padding = 100.0f;
                         float canvasWidth = maxX - minX + padding * 2;
                         float canvasHeight = maxY - minY + padding * 2;
-                        
+
                         ImVec2 canvasPos = ImGui::GetCursorScreenPos();
                         ImVec2 offset = ImVec2(canvasPos.x + padding - minX, 
-                                              canvasPos.y + padding - minY);
-                        
+                                            canvasPos.y + padding - minY);
+
                         ImGui::Dummy(ImVec2(canvasWidth, canvasHeight));
-                        
+
                         ImGui::SetCursorScreenPos(canvasPos);
                         ImGui::InvisibleButton("##canvas", ImVec2(canvasWidth, canvasHeight));
                         bool isHovered = ImGui::IsItemHovered();
