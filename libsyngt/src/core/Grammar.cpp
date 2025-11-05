@@ -43,6 +43,44 @@ void Grammar::load(const std::string& filename) {
     
     Parser parser;
     std::string line;
+    std::string currentRule;
+    std::string currentName;
+    bool readingRule = false;
+    
+    auto findEndOfRule = [](const std::string& text) -> size_t {
+        bool inQuotes = false;
+        bool inComment = false;
+        char quoteChar = '\0';
+        
+        for (size_t i = 0; i < text.length(); ++i) {
+            char ch = text[i];
+            
+            if (inComment) {
+                if (ch == '}') {
+                    inComment = false;
+                }
+                continue;
+            }
+            
+            if (!inQuotes) {
+                if (ch == '{') {
+                    inComment = true;
+                } else if (ch == '\'' || ch == '"') {
+                    inQuotes = true;
+                    quoteChar = ch;
+                } else if (ch == '.') {
+                    return i;
+                }
+            } else {
+                if (ch == quoteChar) {
+                    inQuotes = false;
+                    quoteChar = '\0';
+                }
+            }
+        }
+        
+        return std::string::npos;
+    };
     
     while (std::getline(file, line)) {
         if (line.find("EOGram!") != std::string::npos) {
@@ -54,25 +92,55 @@ void Grammar::load(const std::string& filename) {
         }
         
         size_t colonPos = line.find(':');
-        if (colonPos == std::string::npos) {
-            continue;
+        
+        if (colonPos != std::string::npos && !readingRule) {
+            currentName = line.substr(0, colonPos);
+            currentName.erase(0, currentName.find_first_not_of(" \t"));
+            currentName.erase(currentName.find_last_not_of(" \t") + 1);
+            
+            currentRule = line.substr(colonPos + 1);
+            
+            int ntId = addNonTerminal(currentName);
+            (void)ntId;
+            
+            readingRule = true;
+        } else if (readingRule) {
+            currentRule += " " + line;
         }
         
-        std::string name = line.substr(0, colonPos);
-        name.erase(0, name.find_first_not_of(" \t"));
-        name.erase(name.find_last_not_of(" \t") + 1);
-        
-        std::string rule = line.substr(colonPos + 1);
-        
-        int ntId = addNonTerminal(name);
-        (void)ntId;
+        if (readingRule) {
+            size_t dotPos = findEndOfRule(currentRule);
+            
+            if (dotPos != std::string::npos) {
+                std::string ruleText = currentRule.substr(0, dotPos);
+                ruleText += ".";
+                
+                try {
+                    auto tree = parser.parse(ruleText, this);
+                    setNTRoot(currentName, std::move(tree));
+                } catch (const std::exception& e) {
+                    std::cerr << "Failed to parse rule for '" << currentName << "': " << e.what() << "\n";
+                    std::cerr << "  Rule was: " << ruleText << "\n";
+                }
+                
+                currentRule.clear();
+                currentName.clear();
+                readingRule = false;
+            }
+        }
+    }
+    
+    if (readingRule && !currentName.empty() && !currentRule.empty()) {
+        if (currentRule.back() != '.') {
+            currentRule += ".";
+        }
         
         try {
-            auto tree = parser.parse(rule, this);
-            setNTRoot(name, std::move(tree));
+            auto tree = parser.parse(currentRule, this);
+            setNTRoot(currentName, std::move(tree));
         } catch (const std::exception& e) {
-            std::cerr << "Failed to parse rule for '" << name << "': " << e.what() << "\n";
-            std::cerr << "  Rule was: " << rule << "\n";
+            std::cerr << "Failed to parse rule for '" << currentName << "': " << e.what() << "\n";
+            std::cerr << "  Rule was: " << currentRule << "\n";
         }
     }
     
@@ -85,51 +153,69 @@ void Grammar::importFromGEdit(const std::string& filename) {
         throw std::runtime_error("Cannot open file: " + filename);
     }
     
+    std::stringstream buffer;
+    buffer << file.rdbuf();
+    file.close();
+    std::string fileContent = buffer.str();
+    
     fillNew();
     
+    CharProducer producer(fileContent);
     Parser2 parser;
-    std::string line;
     
-    while (std::getline(file, line)) {
-        std::string upperLine = line;
-        for (char& c : upperLine) {
+    std::string name = readIdentifier(&producer);
+    
+    while (true) {
+        std::string upperName = name;
+        for (char& c : upperName) {
             c = std::toupper(static_cast<unsigned char>(c));
         }
         
-        if (upperLine.find("EOGRAM") != std::string::npos) {
+        if (upperName == "EOGRAM") {
             break;
         }
-        
-        if (line.empty() || line[0] == '{' || line[0] == '/') {
-            continue;
-        }
-        
-        size_t colonPos = line.find(':');
-        if (colonPos == std::string::npos) {
-            continue;
-        }
-        
-        std::string name = line.substr(0, colonPos);
-        name.erase(0, name.find_first_not_of(" \t"));
-        name.erase(name.find_last_not_of(" \t") + 1);
-        
-        std::string rule = line.substr(colonPos + 1);
         
         int ntId = findNonTerminal(name);
         if (ntId < 0) {
             ntId = addNonTerminal(name);
         }
         
-        try {
-            auto tree = parser.parse(rule, this);
-            setNTRoot(name, std::move(tree));
-        } catch (const std::exception& e) {
-            std::cerr << "Failed to parse rule for '" << name << "': " << e.what() << "\n";
-            std::cerr << "  Rule was: " << rule << "\n";
+        if (!producer.next()) {
+            break;
         }
+        
+        std::string preview;
+        size_t savedPos = producer.index();
+        for (int i = 0; i < 50 && !producer.isEnd(); ++i) {
+            char ch = producer.currentChar();
+            if (ch == '\n') preview += "\\n";
+            else if (ch == '\t') preview += "\\t";
+            else if (ch == '\r') preview += "\\r";
+            else preview += ch;
+            producer.next();
+        }
+        
+        producer.reset();
+        for (size_t i = 0; i < savedPos; ++i) producer.next();
+        
+        try {
+            auto tree = parser.parseFromProducer(&producer, this);
+            
+            if (tree) {
+                SelectionMask mask;
+                std::string ruleStr = tree->toString(mask, false);
+                setNTRoot(name, std::move(tree));
+            }
+        } catch (const std::exception& e) {
+            std::cerr << "[ImportFromGEdit] ERROR parsing rule: " << e.what() << "\n";
+        }
+        
+        if (!producer.next()) {
+            break;
+        }
+        
+        name = readIdentifier(&producer);
     }
-    
-    file.close();
 }
 
 void Grammar::save(const std::string& filename) {

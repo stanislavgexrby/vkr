@@ -36,7 +36,9 @@ std::unique_ptr<RETree> Parser::parseE() {
     auto left = parseT();
     
     skipSpaces();
+    int altCount = 0;
     while (m_producer->currentChar() == ';') {
+        altCount++;
         m_producer->next();
         skipSpaces();
         
@@ -54,7 +56,9 @@ std::unique_ptr<RETree> Parser::parseT() {
     auto left = parseF();
     
     skipSpaces();
+    int seqCount = 0;
     while (m_producer->currentChar() == ',') {
+        seqCount++;
         m_producer->next();
         skipSpaces();
         
@@ -105,10 +109,10 @@ std::unique_ptr<RETree> Parser::parseU() {
         auto epsilon = std::make_unique<RETerminal>(m_grammar, 0);
         
         if (op == '*') {
-            // K* → Iteration(epsilon, K)
+            // K* -> Iteration(epsilon, K)
             left = REIteration::make(std::move(epsilon), std::move(left));
         } else {
-            // K+ → Iteration(K, epsilon)
+            // K+ -> Iteration(K, epsilon)
             left = REIteration::make(std::move(left), std::move(epsilon));
         }
         
@@ -167,8 +171,8 @@ std::unique_ptr<RETree> Parser::parseK() {
             
             auto inner = parseK();
             
-            // @* → Iteration(epsilon, K)
-            // @+ → Iteration(K, epsilon) 
+            // @* -> Iteration(epsilon, K)
+            // @+ -> Iteration(K, epsilon) 
             auto epsilon = std::make_unique<RETerminal>(m_grammar, 0);
             
             if (nextCh == '*') {

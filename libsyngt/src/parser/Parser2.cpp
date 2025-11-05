@@ -11,6 +11,61 @@
 
 namespace syngt {
 
+    static void skipNotMatter(CharProducer* producer) {
+    char ch = producer->currentChar();
+    
+    while (!producer->isEnd() && 
+           !std::isalnum(static_cast<unsigned char>(ch)) && 
+           ch != '_' && ch != '\'' && ch != '"' && 
+           ch != '[' && ch != ']' && ch != '(' && ch != ')' && 
+           ch != '{' && ch != '}' && ch != '*' && ch != '+' && 
+           ch != ',' && ch != ';' && ch != '#' && ch != '.' && 
+           ch != '@' && ch != ':' && ch != '$' && ch != '/' && ch != '&') 
+    {
+        producer->next();
+        ch = producer->currentChar();
+    }
+}
+
+void skipToChar(CharProducer* producer, char ch) {
+    while (producer->currentChar() != ch && !producer->isEnd()) {
+        producer->next();
+    }
+}
+
+void skipSpaces(CharProducer* producer) {
+    skipNotMatter(producer);
+    
+    while (producer->currentChar() == '{' || producer->currentChar() == '/') {
+        if (producer->currentChar() == '{') {
+            skipToChar(producer, '}');
+        } else {
+            skipToChar(producer, '\n');
+        }
+        producer->next();
+        skipNotMatter(producer);
+    }
+}
+
+bool isLetterOrDigit(char ch) {
+    return std::isalnum(static_cast<unsigned char>(ch)) || ch == '_';
+}
+
+std::string readIdentifier(CharProducer* producer) {
+    skipSpaces(producer);
+    std::string name;
+    
+    char ch = producer->currentChar();
+    while (isLetterOrDigit(ch) && !producer->isEnd()) {
+        name += ch;
+        producer->next();
+        skipSpaces(producer);
+        ch = producer->currentChar();
+    }
+    
+    return name;
+}
+
 std::unique_ptr<RETree> Parser2::parse(const std::string& text, Grammar* grammar) {
     CharProducer producer(text);
     return parseFromProducer(&producer, grammar);
@@ -20,10 +75,12 @@ std::unique_ptr<RETree> Parser2::parseFromProducer(CharProducer* producer, Gramm
     m_producer = producer;
     m_grammar = grammar;
     
-    skipSpaces();
+    skipSpaces(m_producer);
+    
     auto result = parseE();
     
-    skipSpaces();
+    skipSpaces(m_producer);
+    
     if (m_producer->currentChar() == '.') {
         m_producer->next();
     } else {
@@ -37,15 +94,15 @@ std::unique_ptr<RETree> Parser2::parseFromProducer(CharProducer* producer, Gramm
 std::unique_ptr<RETree> Parser2::parseE() {
     auto left = parseT();
     
-    skipSpaces();
+    skipSpaces(m_producer);
     while (m_producer->currentChar() == ';') {
         m_producer->next();
-        skipSpaces();
+        skipSpaces(m_producer);
         
         auto right = parseT();
         left = REOr::make(std::move(left), std::move(right));
         
-        skipSpaces();
+        skipSpaces(m_producer);
     }
     
     return left;
@@ -55,15 +112,15 @@ std::unique_ptr<RETree> Parser2::parseE() {
 std::unique_ptr<RETree> Parser2::parseT() {
     auto left = parseF();
     
-    skipSpaces();
+    skipSpaces(m_producer);
     while (m_producer->currentChar() == ',') {
         m_producer->next();
-        skipSpaces();
+        skipSpaces(m_producer);
         
         auto right = parseF();
         left = REAnd::make(std::move(left), std::move(right));
         
-        skipSpaces();
+        skipSpaces(m_producer);
     }
     
     return left;
@@ -73,15 +130,15 @@ std::unique_ptr<RETree> Parser2::parseT() {
 std::unique_ptr<RETree> Parser2::parseF() {
     auto left = parseU();
     
-    skipSpaces();
+    skipSpaces(m_producer);
     while (m_producer->currentChar() == '*') {
         m_producer->next();
-        skipSpaces();
+        skipSpaces(m_producer);
         
         auto right = parseU();
         left = REIteration::make(std::move(left), std::move(right));
         
-        skipSpaces();
+        skipSpaces(m_producer);
     }
     
     return left;
@@ -89,20 +146,19 @@ std::unique_ptr<RETree> Parser2::parseF() {
 
 // U = $Semantic | Term | NonTerm | '(' E ')' | '[' E ']'
 std::unique_ptr<RETree> Parser2::parseU() {
-    skipSpaces();
+    skipSpaces(m_producer);
     char ch = m_producer->currentChar();
     
-    // ( E )
     if (ch == '(') {
         m_producer->next();
         auto expr = parseE();
         
-        skipSpaces();
+        skipSpaces(m_producer);
         if (m_producer->currentChar() != ')') {
             throw std::runtime_error("Expected ')'");
         }
         m_producer->next();
-        skipSpaces();
+        skipSpaces(m_producer);
         
         return expr;
     }
@@ -111,14 +167,13 @@ std::unique_ptr<RETree> Parser2::parseU() {
         m_producer->next();
         auto expr = parseE();
         
-        skipSpaces();
+        skipSpaces(m_producer);
         if (m_producer->currentChar() != ']') {
             throw std::runtime_error("Expected ']'");
         }
         m_producer->next();
-        skipSpaces();
+        skipSpaces(m_producer);
         
-        // [E] = (epsilon ; E)
         auto epsilon = std::make_unique<RETerminal>(m_grammar, 0);
         return REOr::make(std::move(epsilon), std::move(expr));
     }
@@ -133,22 +188,21 @@ std::unique_ptr<RETree> Parser2::parseU() {
             throw std::runtime_error(std::string("Expected closing ") + quote);
         }
         
-        skipSpaces();
+        skipSpaces(m_producer);
         
         int id = m_grammar->addTerminal(name);
         return std::make_unique<RETerminal>(m_grammar, id);
     }
     
-    // Epsilon
     if (ch == '@' || ch == '&') {
         m_producer->next();
-        skipSpaces();
-        return std::make_unique<RETerminal>(m_grammar, 0); // Epsilon = ID 0
+        skipSpaces(m_producer);
+        return std::make_unique<RETerminal>(m_grammar, 0);
     }
     
     if (ch == '$') {
         m_producer->next();
-        std::string name = "$" + readIdentifier();
+        std::string name = "$" + readIdentifier(m_producer);
         
         int id = m_grammar->findSemantic(name);
         if (id < 0) {
@@ -159,7 +213,7 @@ std::unique_ptr<RETree> Parser2::parseU() {
     }
     
     if (std::isalpha(static_cast<unsigned char>(ch)) || ch == '_') {
-        std::string name = readIdentifier();
+        std::string name = readIdentifier(m_producer);
         
         int id = m_grammar->findNonTerminal(name);
         if (id < 0) {
@@ -170,57 +224,6 @@ std::unique_ptr<RETree> Parser2::parseU() {
     }
     
     throw std::runtime_error(std::string("Unexpected character: ") + ch);
-}
-
-void Parser2::skipNotMatter() {
-    char ch = m_producer->currentChar();
-    
-    while (!m_producer->isEnd() && 
-           !std::isalnum(static_cast<unsigned char>(ch)) && 
-           ch != '_' && ch != '\'' && ch != '"' && 
-           ch != '[' && ch != ']' && ch != '(' && ch != ')' && 
-           ch != '{' && ch != '}' && ch != '*' && ch != '+' && 
-           ch != ',' && ch != ';' && ch != '#' && ch != '.' && 
-           ch != '@' && ch != ':' && ch != '$' && ch != '/' && ch != '&') 
-    {
-        m_producer->next();
-        ch = m_producer->currentChar();
-    }
-}
-
-void Parser2::skipSpaces() {
-    skipNotMatter();
-    
-    while (m_producer->currentChar() == '{' || m_producer->currentChar() == '/') {
-        if (m_producer->currentChar() == '{') {
-            skipToChar('}');
-        } else {
-            skipToChar('\n');
-        }
-        m_producer->next();
-        skipNotMatter();
-    }
-}
-
-void Parser2::skipToChar(char ch) {
-    while (m_producer->currentChar() != ch && !m_producer->isEnd()) {
-        m_producer->next();
-    }
-}
-
-std::string Parser2::readIdentifier() {
-    skipSpaces();
-    std::string name;
-    
-    char ch = m_producer->currentChar();
-    while (isLetterOrDigit(ch) && !m_producer->isEnd()) {
-        name += ch;
-        m_producer->next();
-        skipSpaces();
-        ch = m_producer->currentChar();
-    }
-    
-    return name;
 }
 
 std::string Parser2::readName(char lastChar) {
@@ -236,8 +239,4 @@ std::string Parser2::readName(char lastChar) {
     return name;
 }
 
-bool Parser2::isLetterOrDigit(char ch) const {
-    return std::isalnum(static_cast<unsigned char>(ch)) || ch == '_';
-}
-
-}
+} // namespace syngt
