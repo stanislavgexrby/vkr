@@ -759,7 +759,11 @@ bool RenameNonTerminal(int oldId, const std::string& newName) {
 }
 
 void DeleteSelectedObjects() {
-    if (!drawObjects || !grammar) return;
+    if (!drawObjects || !grammar) {
+        ClearOutput();
+        AppendOutput("No diagram or grammar loaded!\n");
+        return;
+    }
     
     int selectedCount = 0;
     std::vector<syngt::graphics::DrawObject*> toDelete;
@@ -784,26 +788,62 @@ void DeleteSelectedObjects() {
     AppendOutput(buf);
     AppendOutput(" object(s)...\n");
     
-    std::vector<std::pair<std::string, int>> symbolsToRemove;
+    struct SymbolOccurrence {
+        std::string name;
+        int type;
+        int occurrence;
+    };
+    
+    std::vector<SymbolOccurrence> occurrencesToDelete;
     
     for (auto* obj : toDelete) {
         auto leaf = dynamic_cast<syngt::graphics::DrawObjectLeaf*>(obj);
-        if (leaf) {
-            std::string name = leaf->name();
-            int type = obj->getType();
-            if (!name.empty() && name != "eps") {
-                symbolsToRemove.push_back({name, type});
-                AppendOutput("  - ");
-                AppendOutput(name.c_str());
-                AppendOutput("\n");
+        if (!leaf) continue;
+        
+        std::string name = leaf->name();
+        int type = obj->getType();
+        
+        if (name.empty() || name == "eps") continue;
+        
+        int objIndex = -1;
+        for (int i = 0; i < drawObjects->count(); ++i) {
+            if ((*drawObjects)[i] == obj) {
+                objIndex = i;
+                break;
             }
         }
+        
+        if (objIndex < 0) continue;
+        
+        int occurrence = 0;
+        for (int i = 0; i < objIndex; ++i) {
+            auto checkLeaf = dynamic_cast<syngt::graphics::DrawObjectLeaf*>((*drawObjects)[i]);
+            if (checkLeaf && 
+                (*drawObjects)[i]->getType() == type &&
+                checkLeaf->name() == name) {
+                occurrence++;
+            }
+        }
+        
+        occurrencesToDelete.push_back({name, type, occurrence});
     }
     
-    if (symbolsToRemove.empty()) {
+    if (occurrencesToDelete.empty()) {
         AppendOutput("Only structural elements selected (cannot delete)\n");
         drawObjects->unselectAll();
         return;
+    }
+    
+    std::map<std::pair<std::string, int>, std::set<int>> toDeleteMap;
+    for (const auto& occ : occurrencesToDelete) {
+        toDeleteMap[{occ.name, occ.type}].insert(occ.occurrence);
+        
+        AppendOutput("  - ");
+        AppendOutput(occ.name.c_str());
+        char buf2[32];
+        snprintf(buf2, sizeof(buf2), " (occurrence #%d)", occ.occurrence);
+        AppendOutput(buf2);
+        AppendOutput("\n");
     }
     
     auto nts = grammar->getNonTerminals();
@@ -841,89 +881,93 @@ void DeleteSelectedObjects() {
     AppendOutput(ruleBody.c_str());
     AppendOutput("\n");
     
-    for (const auto& [name, type] : symbolsToRemove) {
+    for (const auto& [key, occurrences] : toDeleteMap) {
+        const std::string& name = key.first;
+        int type = key.second;
+        
+        struct Position {
+            size_t start;
+            size_t end;
+            int occurrence;
+        };
+        std::vector<Position> positions;
+        
         if (type == syngt::graphics::ctDrawObjectTerminal) {
-            std::string pattern = "'" + name + "'";
+            // Для терминалов ищем 'name' или "name"
+            std::string pattern1 = "'" + name + "'";
+            std::string pattern2 = "\"" + name + "\"";
+            
             size_t pos = 0;
-            while ((pos = ruleBody.find(pattern, pos)) != std::string::npos) {
-                size_t endPos = pos + pattern.length();
+            int currentOcc = 0;
+            while (pos < ruleBody.length()) {
+                size_t found1 = ruleBody.find(pattern1, pos);
+                size_t found2 = ruleBody.find(pattern2, pos);
+                size_t found = std::min(found1, found2);
                 
-                while (endPos < ruleBody.length() && isspace(ruleBody[endPos])) {
-                    endPos++;
-                }
+                if (found == std::string::npos) break;
                 
-                if (endPos < ruleBody.length() && (ruleBody[endPos] == ',' || ruleBody[endPos] == ';')) {
-                    endPos++;
-                    while (endPos < ruleBody.length() && isspace(ruleBody[endPos])) {
-                        endPos++;
-                    }
-                } else {
-                    if (pos > 0) {
-                        int beforePos = static_cast<int>(pos) - 1;
-                        while (beforePos > 0 && isspace(ruleBody[beforePos])) {
-                            beforePos--;
-                        }
-                        if (beforePos >= 0 && (ruleBody[beforePos] == ',' || ruleBody[beforePos] == ';')) {
-                            pos = beforePos;
-                            while (pos > 0 && isspace(ruleBody[pos - 1])) {
-                                pos--;
-                            }
-                        }
-                    }
-                }
-                
-                ruleBody.erase(pos, endPos - pos);
+                size_t patternLen = (found == found1) ? pattern1.length() : pattern2.length();
+                positions.push_back({found, found + patternLen, currentOcc});
+                currentOcc++;
+                pos = found + 1;
             }
         } else if (type == syngt::graphics::ctDrawObjectNonTerminal) {
             size_t pos = 0;
+            int currentOcc = 0;
             while ((pos = ruleBody.find(name, pos)) != std::string::npos) {
-                bool isStart = (pos == 0 || !isalnum(ruleBody[pos-1]));
-                bool isEnd = (pos + name.length() >= ruleBody.length() || 
-                              !isalnum(ruleBody[pos + name.length()]));
+                bool isWordStart = (pos == 0) || !isalnum(ruleBody[pos - 1]);
+                bool isWordEnd = (pos + name.length() >= ruleBody.length()) || 
+                                 !isalnum(ruleBody[pos + name.length()]);
                 
-                if (isStart && isEnd) {
-                    size_t endPos = pos + name.length();
-                    
-                    while (endPos < ruleBody.length() && isspace(ruleBody[endPos])) {
-                        endPos++;
+                if (isWordStart && isWordEnd) {
+                    positions.push_back({pos, pos + name.length(), currentOcc});
+                    currentOcc++;
+                }
+                pos++;
+            }
+        }
+        
+        for (auto it = positions.rbegin(); it != positions.rend(); ++it) {
+            if (occurrences.count(it->occurrence) > 0) {
+                size_t start = it->start;
+                size_t end = it->end;
+                
+                while (end < ruleBody.length() && isspace(ruleBody[end])) {
+                    end++;
+                }
+                
+                if (end < ruleBody.length() && (ruleBody[end] == ',' || ruleBody[end] == ';')) {
+                    end++;
+                    while (end < ruleBody.length() && isspace(ruleBody[end])) {
+                        end++;
                     }
-                    
-                    if (endPos < ruleBody.length() && (ruleBody[endPos] == ',' || ruleBody[endPos] == ';')) {
-                        endPos++;
-                        while (endPos < ruleBody.length() && isspace(ruleBody[endPos])) {
-                            endPos++;
-                        }
-                    } else if (pos > 0) {
-                        int beforePos = static_cast<int>(pos) - 1;
+                } else {
+                    if (start > 0) {
+                        size_t beforePos = start - 1;
                         while (beforePos > 0 && isspace(ruleBody[beforePos])) {
                             beforePos--;
                         }
-                        if (beforePos >= 0 && (ruleBody[beforePos] == ',' || ruleBody[beforePos] == ';')) {
-                            pos = beforePos;
-                            while (pos > 0 && isspace(ruleBody[pos - 1])) {
-                                pos--;
+                        if (ruleBody[beforePos] == ',' || ruleBody[beforePos] == ';') {
+                            start = beforePos;
+                            while (start > 0 && isspace(ruleBody[start - 1])) {
+                                start--;
                             }
                         }
                     }
-                    
-                    ruleBody.erase(pos, endPos - pos);
-                } else {
-                    pos++;
                 }
+                
+                ruleBody.erase(start, end - start);
             }
         }
     }
     
     size_t firstNonSpace = ruleBody.find_first_not_of(" \t\n\r");
-    if (firstNonSpace != std::string::npos) {
-        ruleBody = ruleBody.substr(firstNonSpace);
+    size_t lastNonSpace = ruleBody.find_last_not_of(" \t\n\r");
+    
+    if (firstNonSpace != std::string::npos && lastNonSpace != std::string::npos) {
+        ruleBody = ruleBody.substr(firstNonSpace, lastNonSpace - firstNonSpace + 1);
     } else {
         ruleBody = "";
-    }
-    
-    size_t lastNonSpace = ruleBody.find_last_not_of(" \t\n\r");
-    if (lastNonSpace != std::string::npos) {
-        ruleBody = ruleBody.substr(0, lastNonSpace + 1);
     }
     
     if (!ruleBody.empty() && (ruleBody[0] == ',' || ruleBody[0] == ';')) {
