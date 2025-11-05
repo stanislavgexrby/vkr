@@ -1,10 +1,20 @@
-#include <imgui.h>
-#include <backends/imgui_impl_win32.h>
-#include <backends/imgui_impl_dx11.h>
-#include <d3d11.h>
-#include <tchar.h>
-#include <windows.h>
-#include <commdlg.h>
+#ifdef _WIN32
+    #include <imgui.h>
+    #include <backends/imgui_impl_win32.h>
+    #include <backends/imgui_impl_dx11.h>
+    #include <d3d11.h>
+    #include <tchar.h>
+    #include <windows.h>
+    #include <commdlg.h>
+#else
+    #include <imgui.h>
+    #include <backends/imgui_impl_glfw.h>
+    #include <backends/imgui_impl_opengl3.h>
+    #include <GLFW/glfw3.h>
+    #include <cstring>
+    #include <limits.h>
+    #define MAX_PATH 260
+#endif
 
 #include <syngt/core/Grammar.h>
 #include <syngt/core/NTListItem.h>
@@ -23,21 +33,33 @@
 #include <memory>
 #include <cmath>
 
-static ID3D11Device*            g_pd3dDevice = nullptr;
-static ID3D11DeviceContext*     g_pd3dDeviceContext = nullptr;
-static IDXGISwapChain*          g_pSwapChain = nullptr;
-static ID3D11RenderTargetView*  g_mainRenderTargetView = nullptr;
+#ifdef _WIN32
+    static ID3D11Device*            g_pd3dDevice = nullptr;
+    static ID3D11DeviceContext*     g_pd3dDeviceContext = nullptr;
+    static IDXGISwapChain*          g_pSwapChain = nullptr;
+    static ID3D11RenderTargetView*  g_mainRenderTargetView = nullptr;
+#else
+    static GLFWwindow* g_Window = nullptr;
+#endif
 
-bool CreateDeviceD3D(HWND hWnd);
-void CleanupDeviceD3D();
 void AddNonTerminalReferenceToGrammar(const std::string& name);
 void FindAndCreateMissingNonTerminals(const std::string& rule);
 void DrawArrowhead(ImDrawList* drawList, ImVec2 from, ImVec2 to, ImU32 color);
 void LoadRuleToEditor();
 void BuildRule();
-void CreateRenderTarget();
-void CleanupRenderTarget();
-LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+
+#ifdef _WIN32
+    bool CreateDeviceD3D(HWND hWnd);
+    void CleanupDeviceD3D();
+    void CreateRenderTarget();
+    void CleanupRenderTarget();
+    LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+    extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+#else
+    static void glfw_error_callback(int error, const char* description) {
+        fprintf(stderr, "GLFW Error %d: %s\n", error, description);
+    }
+#endif
 
 static char ruleText[4096] = "";
 static char grammarText[1024 * 64] = "";
@@ -91,39 +113,85 @@ void SaveTextFile(const char* filename, const std::string& content) {
     file << content;
 }
 
-std::string OpenFileDialog() {
-    char filename[MAX_PATH] = "";
-    OPENFILENAMEA ofn = {};
-    ofn.lStructSize = sizeof(ofn);
-    ofn.hwndOwner = nullptr;
-    ofn.lpstrFilter = "Grammar Files (*.grm)\0*.grm\0All Files (*.*)\0*.*\0";
-    ofn.lpstrFile = filename;
-    ofn.nMaxFile = MAX_PATH;
-    ofn.Flags = OFN_EXPLORER | OFN_FILEMUSTEXIST | OFN_HIDEREADONLY;
-    ofn.lpstrDefExt = "grm";
-    
-    if (GetOpenFileNameA(&ofn)) {
-        return std::string(filename);
+#ifdef _WIN32
+    std::string OpenFileDialog() {
+        char filename[MAX_PATH] = "";
+        OPENFILENAMEA ofn = {};
+        ofn.lStructSize = sizeof(ofn);
+        ofn.hwndOwner = nullptr;
+        ofn.lpstrFilter = "Grammar Files (*.grm)\0*.grm\0All Files (*.*)\0*.*\0";
+        ofn.lpstrFile = filename;
+        ofn.nMaxFile = MAX_PATH;
+        ofn.Flags = OFN_EXPLORER | OFN_FILEMUSTEXIST | OFN_HIDEREADONLY;
+        ofn.lpstrDefExt = "grm";
+        
+        if (GetOpenFileNameA(&ofn)) {
+            return std::string(filename);
+        }
+        return "";
     }
-    return "";
-}
 
-std::string SaveFileDialog() {
-    char filename[MAX_PATH] = "";
-    OPENFILENAMEA ofn = {};
-    ofn.lStructSize = sizeof(ofn);
-    ofn.hwndOwner = nullptr;
-    ofn.lpstrFilter = "Grammar Files (*.grm)\0*.grm\0All Files (*.*)\0*.*\0";
-    ofn.lpstrFile = filename;
-    ofn.nMaxFile = MAX_PATH;
-    ofn.Flags = OFN_EXPLORER | OFN_PATHMUSTEXIST | OFN_HIDEREADONLY | OFN_OVERWRITEPROMPT;
-    ofn.lpstrDefExt = "grm";
-    
-    if (GetSaveFileNameA(&ofn)) {
-        return std::string(filename);
+    std::string SaveFileDialog() {
+        char filename[MAX_PATH] = "";
+        OPENFILENAMEA ofn = {};
+        ofn.lStructSize = sizeof(ofn);
+        ofn.hwndOwner = nullptr;
+        ofn.lpstrFilter = "Grammar Files (*.grm)\0*.grm\0All Files (*.*)\0*.*\0";
+        ofn.lpstrFile = filename;
+        ofn.nMaxFile = MAX_PATH;
+        ofn.Flags = OFN_EXPLORER | OFN_PATHMUSTEXIST | OFN_HIDEREADONLY | OFN_OVERWRITEPROMPT;
+        ofn.lpstrDefExt = "grm";
+        
+        if (GetSaveFileNameA(&ofn)) {
+            return std::string(filename);
+        }
+        return "";
     }
-    return "";
-}
+#else
+    std::string OpenFileDialog() {
+        char filename[MAX_PATH] = "";
+        FILE* f = popen("zenity --file-selection --file-filter='Grammar files | *.grm' --file-filter='All files | *' 2>/dev/null", "r");
+        if (f && fgets(filename, sizeof(filename), f)) {
+            pclose(f);
+            size_t len = strlen(filename);
+            if (len > 0 && filename[len-1] == '\n')
+                filename[len-1] = '\0';
+            return std::string(filename);
+        }
+        if (f) pclose(f);
+        
+        printf("Enter filename to open (.grm): ");
+        if (fgets(filename, sizeof(filename), stdin)) {
+            size_t len = strlen(filename);
+            if (len > 0 && filename[len-1] == '\n')
+                filename[len-1] = '\0';
+            return std::string(filename);
+        }
+        return "";
+    }
+
+    std::string SaveFileDialog() {
+        char filename[MAX_PATH] = "";
+        FILE* f = popen("zenity --file-selection --save --file-filter='Grammar files | *.grm' --file-filter='All files | *' 2>/dev/null", "r");
+        if (f && fgets(filename, sizeof(filename), f)) {
+            pclose(f);
+            size_t len = strlen(filename);
+            if (len > 0 && filename[len-1] == '\n')
+                filename[len-1] = '\0';
+            return std::string(filename);
+        }
+        if (f) pclose(f);
+        
+        printf("Enter filename to save (.grm): ");
+        if (fgets(filename, sizeof(filename), stdin)) {
+            size_t len = strlen(filename);
+            if (len > 0 && filename[len-1] == '\n')
+                filename[len-1] = '\0';
+            return std::string(filename);
+        }
+        return "";
+    }
+#endif
 
 void LoadRuleToEditor() {
     if (!grammar) {
@@ -1843,6 +1911,8 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 int main(int, char**)
 {
+#ifdef _WIN32
+    // ===== WINDOWS VERSION (DirectX 11) =====
     WNDCLASSEXW wc = { sizeof(wc), CS_CLASSDC, WndProc, 0L, 0L, GetModuleHandle(nullptr), 
                        nullptr, nullptr, nullptr, nullptr, L"SynGT", nullptr };
     ::RegisterClassExW(&wc);
@@ -1866,17 +1936,15 @@ int main(int, char**)
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     io.IniFilename = "syngt.ini";
 
-    // Setup style
     ImGui::StyleColorsLight();
     
-    // Color style
     ImGuiStyle& style = ImGui::GetStyle();
     style.WindowRounding = 5.0f;
     style.FrameRounding = 3.0f;
     style.GrabRounding = 3.0f;
     style.ScrollbarRounding = 3.0f;
 
-    // Main colors
+    // Color scheme
     style.Colors[ImGuiCol_Text] = ImVec4(0.10f, 0.10f, 0.10f, 1.00f);
     style.Colors[ImGuiCol_TextDisabled] = ImVec4(0.60f, 0.60f, 0.60f, 1.00f);
     style.Colors[ImGuiCol_WindowBg] = ImVec4(0.95f, 0.95f, 0.95f, 1.00f);
@@ -1896,34 +1964,34 @@ int main(int, char**)
     style.Colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4(0.65f, 0.65f, 0.65f, 1.00f);
     style.Colors[ImGuiCol_ScrollbarGrabActive] = ImVec4(0.55f, 0.55f, 0.55f, 1.00f);
     style.Colors[ImGuiCol_CheckMark] = ImVec4(0.25f, 0.55f, 0.95f, 1.00f);
-    style.Colors[ImGuiCol_SliderGrab] = ImVec4(0.35f, 0.65f, 1.00f, 1.00f);
+    style.Colors[ImGuiCol_SliderGrab] = ImVec4(0.25f, 0.55f, 0.95f, 1.00f);
     style.Colors[ImGuiCol_SliderGrabActive] = ImVec4(0.25f, 0.55f, 0.95f, 1.00f);
-    style.Colors[ImGuiCol_Button] = ImVec4(0.25f, 0.55f, 0.95f, 1.00f);
-    style.Colors[ImGuiCol_ButtonHovered] = ImVec4(0.35f, 0.65f, 1.00f, 1.00f);
-    style.Colors[ImGuiCol_ButtonActive] = ImVec4(0.15f, 0.45f, 0.85f, 1.00f);
-    style.Colors[ImGuiCol_Header] = ImVec4(0.25f, 0.55f, 0.95f, 1.00f);
-    style.Colors[ImGuiCol_HeaderHovered] = ImVec4(0.35f, 0.65f, 1.00f, 1.00f);
-    style.Colors[ImGuiCol_HeaderActive] = ImVec4(0.15f, 0.45f, 0.85f, 1.00f);
-    style.Colors[ImGuiCol_Separator] = ImVec4(0.80f, 0.80f, 0.80f, 1.00f);
-    style.Colors[ImGuiCol_SeparatorHovered] = ImVec4(0.60f, 0.60f, 0.60f, 1.00f);
-    style.Colors[ImGuiCol_SeparatorActive] = ImVec4(0.40f, 0.40f, 0.40f, 1.00f);
-    style.Colors[ImGuiCol_ResizeGrip] = ImVec4(0.25f, 0.55f, 0.95f, 0.30f);
+    style.Colors[ImGuiCol_Button] = ImVec4(0.90f, 0.90f, 0.90f, 1.00f);
+    style.Colors[ImGuiCol_ButtonHovered] = ImVec4(0.25f, 0.55f, 0.95f, 1.00f);
+    style.Colors[ImGuiCol_ButtonActive] = ImVec4(0.20f, 0.50f, 0.90f, 1.00f);
+    style.Colors[ImGuiCol_Header] = ImVec4(0.90f, 0.90f, 0.90f, 1.00f);
+    style.Colors[ImGuiCol_HeaderHovered] = ImVec4(0.25f, 0.55f, 0.95f, 1.00f);
+    style.Colors[ImGuiCol_HeaderActive] = ImVec4(0.25f, 0.55f, 0.95f, 1.00f);
+    style.Colors[ImGuiCol_Separator] = ImVec4(0.85f, 0.85f, 0.85f, 1.00f);
+    style.Colors[ImGuiCol_SeparatorHovered] = ImVec4(0.25f, 0.55f, 0.95f, 0.78f);
+    style.Colors[ImGuiCol_SeparatorActive] = ImVec4(0.25f, 0.55f, 0.95f, 1.00f);
+    style.Colors[ImGuiCol_ResizeGrip] = ImVec4(0.25f, 0.55f, 0.95f, 0.20f);
     style.Colors[ImGuiCol_ResizeGripHovered] = ImVec4(0.25f, 0.55f, 0.95f, 0.67f);
     style.Colors[ImGuiCol_ResizeGripActive] = ImVec4(0.25f, 0.55f, 0.95f, 0.95f);
-    style.Colors[ImGuiCol_Tab] = ImVec4(0.80f, 0.85f, 0.95f, 1.00f);
-    style.Colors[ImGuiCol_TabHovered] = ImVec4(0.25f, 0.55f, 0.95f, 1.00f);
+    style.Colors[ImGuiCol_Tab] = ImVec4(0.90f, 0.90f, 0.90f, 1.00f);
+    style.Colors[ImGuiCol_TabHovered] = ImVec4(0.25f, 0.55f, 0.95f, 0.80f);
     style.Colors[ImGuiCol_TabActive] = ImVec4(0.25f, 0.55f, 0.95f, 1.00f);
-    style.Colors[ImGuiCol_TabUnfocused] = ImVec4(0.80f, 0.85f, 0.95f, 1.00f);
-    style.Colors[ImGuiCol_TabUnfocusedActive] = ImVec4(0.25f, 0.55f, 0.95f, 1.00f);
-    style.Colors[ImGuiCol_PlotLines] = ImVec4(0.25f, 0.55f, 0.95f, 1.00f);
-    style.Colors[ImGuiCol_PlotLinesHovered] = ImVec4(0.35f, 0.65f, 1.00f, 1.00f);
-    style.Colors[ImGuiCol_PlotHistogram] = ImVec4(0.25f, 0.55f, 0.95f, 1.00f);
-    style.Colors[ImGuiCol_PlotHistogramHovered] = ImVec4(0.35f, 0.65f, 1.00f, 1.00f);
-    style.Colors[ImGuiCol_TableHeaderBg] = ImVec4(0.92f, 0.92f, 0.92f, 1.00f);
-    style.Colors[ImGuiCol_TableBorderStrong] = ImVec4(0.80f, 0.80f, 0.80f, 1.00f);
-    style.Colors[ImGuiCol_TableBorderLight] = ImVec4(0.90f, 0.90f, 0.90f, 1.00f);
-    style.Colors[ImGuiCol_TableRowBg] = ImVec4(1.00f, 1.00f, 1.00f, 1.00f);
-    style.Colors[ImGuiCol_TableRowBgAlt] = ImVec4(0.98f, 0.98f, 0.98f, 1.00f);
+    style.Colors[ImGuiCol_TabUnfocused] = ImVec4(0.92f, 0.92f, 0.92f, 1.00f);
+    style.Colors[ImGuiCol_TabUnfocusedActive] = ImVec4(0.85f, 0.85f, 0.85f, 1.00f);
+    style.Colors[ImGuiCol_PlotLines] = ImVec4(0.39f, 0.39f, 0.39f, 1.00f);
+    style.Colors[ImGuiCol_PlotLinesHovered] = ImVec4(1.00f, 0.43f, 0.35f, 1.00f);
+    style.Colors[ImGuiCol_PlotHistogram] = ImVec4(0.90f, 0.70f, 0.00f, 1.00f);
+    style.Colors[ImGuiCol_PlotHistogramHovered] = ImVec4(1.00f, 0.45f, 0.00f, 1.00f);
+    style.Colors[ImGuiCol_TableHeaderBg] = ImVec4(0.78f, 0.87f, 0.98f, 1.00f);
+    style.Colors[ImGuiCol_TableBorderStrong] = ImVec4(0.57f, 0.57f, 0.64f, 1.00f);
+    style.Colors[ImGuiCol_TableBorderLight] = ImVec4(0.68f, 0.68f, 0.74f, 1.00f);
+    style.Colors[ImGuiCol_TableRowBg] = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
+    style.Colors[ImGuiCol_TableRowBgAlt] = ImVec4(0.30f, 0.30f, 0.35f, 0.09f);
     style.Colors[ImGuiCol_TextSelectedBg] = ImVec4(0.25f, 0.55f, 0.95f, 0.35f);
     style.Colors[ImGuiCol_DragDropTarget] = ImVec4(0.25f, 0.55f, 0.95f, 0.95f);
     style.Colors[ImGuiCol_NavHighlight] = ImVec4(0.25f, 0.55f, 0.95f, 1.00f);
@@ -1931,24 +1999,115 @@ int main(int, char**)
     style.Colors[ImGuiCol_NavWindowingDimBg] = ImVec4(0.80f, 0.80f, 0.80f, 0.20f);
     style.Colors[ImGuiCol_ModalWindowDimBg] = ImVec4(0.20f, 0.20f, 0.20f, 0.35f);
 
-    // Setup Platform/Renderer backends
     ImGui_ImplWin32_Init(hwnd);
     ImGui_ImplDX11_Init(g_pd3dDevice, g_pd3dDeviceContext);
 
     io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\consola.ttf", 16.0f);
     
-    // Default example
+#else
+    // ===== LINUX VERSION (OpenGL 3 + GLFW) =====
+    glfwSetErrorCallback(glfw_error_callback);
+    if (!glfwInit())
+        return 1;
+
+    const char* glsl_version = "#version 130";
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+
+    g_Window = glfwCreateWindow(1280, 800, "SynGT - Syntax Grammar Transformation", nullptr, nullptr);
+    if (g_Window == nullptr)
+        return 1;
+    glfwMakeContextCurrent(g_Window);
+    glfwSwapInterval(1);
+
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO(); (void)io;
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    io.IniFilename = "syngt.ini";
+
+    ImGui::StyleColorsLight();
+    
+    ImGuiStyle& style = ImGui::GetStyle();
+    style.WindowRounding = 5.0f;
+    style.FrameRounding = 3.0f;
+    style.GrabRounding = 3.0f;
+    style.ScrollbarRounding = 3.0f;
+
+    // Color scheme
+    style.Colors[ImGuiCol_Text] = ImVec4(0.10f, 0.10f, 0.10f, 1.00f);
+    style.Colors[ImGuiCol_TextDisabled] = ImVec4(0.60f, 0.60f, 0.60f, 1.00f);
+    style.Colors[ImGuiCol_WindowBg] = ImVec4(0.95f, 0.95f, 0.95f, 1.00f);
+    style.Colors[ImGuiCol_ChildBg] = ImVec4(0.98f, 0.98f, 0.98f, 1.00f);
+    style.Colors[ImGuiCol_PopupBg] = ImVec4(0.98f, 0.98f, 0.98f, 1.00f);
+    style.Colors[ImGuiCol_Border] = ImVec4(0.85f, 0.85f, 0.85f, 1.00f);
+    style.Colors[ImGuiCol_BorderShadow] = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
+    style.Colors[ImGuiCol_FrameBg] = ImVec4(1.00f, 1.00f, 1.00f, 1.00f);
+    style.Colors[ImGuiCol_FrameBgHovered] = ImVec4(0.90f, 0.93f, 1.00f, 1.00f);
+    style.Colors[ImGuiCol_FrameBgActive] = ImVec4(0.80f, 0.87f, 1.00f, 1.00f);
+    style.Colors[ImGuiCol_TitleBg] = ImVec4(0.92f, 0.92f, 0.92f, 1.00f);
+    style.Colors[ImGuiCol_TitleBgActive] = ImVec4(0.25f, 0.55f, 0.95f, 1.00f);
+    style.Colors[ImGuiCol_TitleBgCollapsed] = ImVec4(0.92f, 0.92f, 0.92f, 1.00f);
+    style.Colors[ImGuiCol_MenuBarBg] = ImVec4(0.92f, 0.92f, 0.92f, 1.00f);
+    style.Colors[ImGuiCol_ScrollbarBg] = ImVec4(0.98f, 0.98f, 0.98f, 1.00f);
+    style.Colors[ImGuiCol_ScrollbarGrab] = ImVec4(0.75f, 0.75f, 0.75f, 1.00f);
+    style.Colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4(0.65f, 0.65f, 0.65f, 1.00f);
+    style.Colors[ImGuiCol_ScrollbarGrabActive] = ImVec4(0.55f, 0.55f, 0.55f, 1.00f);
+    style.Colors[ImGuiCol_CheckMark] = ImVec4(0.25f, 0.55f, 0.95f, 1.00f);
+    style.Colors[ImGuiCol_SliderGrab] = ImVec4(0.25f, 0.55f, 0.95f, 1.00f);
+    style.Colors[ImGuiCol_SliderGrabActive] = ImVec4(0.25f, 0.55f, 0.95f, 1.00f);
+    style.Colors[ImGuiCol_Button] = ImVec4(0.90f, 0.90f, 0.90f, 1.00f);
+    style.Colors[ImGuiCol_ButtonHovered] = ImVec4(0.25f, 0.55f, 0.95f, 1.00f);
+    style.Colors[ImGuiCol_ButtonActive] = ImVec4(0.20f, 0.50f, 0.90f, 1.00f);
+    style.Colors[ImGuiCol_Header] = ImVec4(0.90f, 0.90f, 0.90f, 1.00f);
+    style.Colors[ImGuiCol_HeaderHovered] = ImVec4(0.25f, 0.55f, 0.95f, 1.00f);
+    style.Colors[ImGuiCol_HeaderActive] = ImVec4(0.25f, 0.55f, 0.95f, 1.00f);
+    style.Colors[ImGuiCol_Separator] = ImVec4(0.85f, 0.85f, 0.85f, 1.00f);
+    style.Colors[ImGuiCol_SeparatorHovered] = ImVec4(0.25f, 0.55f, 0.95f, 0.78f);
+    style.Colors[ImGuiCol_SeparatorActive] = ImVec4(0.25f, 0.55f, 0.95f, 1.00f);
+    style.Colors[ImGuiCol_ResizeGrip] = ImVec4(0.25f, 0.55f, 0.95f, 0.20f);
+    style.Colors[ImGuiCol_ResizeGripHovered] = ImVec4(0.25f, 0.55f, 0.95f, 0.67f);
+    style.Colors[ImGuiCol_ResizeGripActive] = ImVec4(0.25f, 0.55f, 0.95f, 0.95f);
+    style.Colors[ImGuiCol_Tab] = ImVec4(0.90f, 0.90f, 0.90f, 1.00f);
+    style.Colors[ImGuiCol_TabHovered] = ImVec4(0.25f, 0.55f, 0.95f, 0.80f);
+    style.Colors[ImGuiCol_TabActive] = ImVec4(0.25f, 0.55f, 0.95f, 1.00f);
+    style.Colors[ImGuiCol_TabUnfocused] = ImVec4(0.92f, 0.92f, 0.92f, 1.00f);
+    style.Colors[ImGuiCol_TabUnfocusedActive] = ImVec4(0.85f, 0.85f, 0.85f, 1.00f);
+    style.Colors[ImGuiCol_PlotLines] = ImVec4(0.39f, 0.39f, 0.39f, 1.00f);
+    style.Colors[ImGuiCol_PlotLinesHovered] = ImVec4(1.00f, 0.43f, 0.35f, 1.00f);
+    style.Colors[ImGuiCol_PlotHistogram] = ImVec4(0.90f, 0.70f, 0.00f, 1.00f);
+    style.Colors[ImGuiCol_PlotHistogramHovered] = ImVec4(1.00f, 0.45f, 0.00f, 1.00f);
+    style.Colors[ImGuiCol_TableHeaderBg] = ImVec4(0.78f, 0.87f, 0.98f, 1.00f);
+    style.Colors[ImGuiCol_TableBorderStrong] = ImVec4(0.57f, 0.57f, 0.64f, 1.00f);
+    style.Colors[ImGuiCol_TableBorderLight] = ImVec4(0.68f, 0.68f, 0.74f, 1.00f);
+    style.Colors[ImGuiCol_TableRowBg] = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
+    style.Colors[ImGuiCol_TableRowBgAlt] = ImVec4(0.30f, 0.30f, 0.35f, 0.09f);
+    style.Colors[ImGuiCol_TextSelectedBg] = ImVec4(0.25f, 0.55f, 0.95f, 0.35f);
+    style.Colors[ImGuiCol_DragDropTarget] = ImVec4(0.25f, 0.55f, 0.95f, 0.95f);
+    style.Colors[ImGuiCol_NavHighlight] = ImVec4(0.25f, 0.55f, 0.95f, 1.00f);
+    style.Colors[ImGuiCol_NavWindowingHighlight] = ImVec4(1.00f, 1.00f, 1.00f, 0.70f);
+    style.Colors[ImGuiCol_NavWindowingDimBg] = ImVec4(0.80f, 0.80f, 0.80f, 0.20f);
+    style.Colors[ImGuiCol_ModalWindowDimBg] = ImVec4(0.20f, 0.20f, 0.20f, 0.35f);
+
+    ImGui_ImplGlfw_InitForOpenGL(g_Window, true);
+    ImGui_ImplOpenGL3_Init(glsl_version);
+
+    io.Fonts->AddFontDefault();
+#endif
+
+    // Common initialization
     const char* exampleGrammar = 
         "{ Example: Simple expression grammar }\n"
         "E : T, '+', E ; T.\n"
         "T : '(', E, ')' ; 'id'.\n"
         "EOGram!\n";
-    strcpy_s(grammarText, sizeof(grammarText), exampleGrammar);
+    strcpy(grammarText, exampleGrammar);
 
     // Main loop
     bool done = false;
     while (!done)
     {
+#ifdef _WIN32
         MSG msg;
         while (::PeekMessage(&msg, nullptr, 0U, 0U, PM_REMOVE))
         {
@@ -1960,10 +2119,18 @@ int main(int, char**)
         if (done)
             break;
 
-        // Start ImGui frame
         ImGui_ImplDX11_NewFrame();
         ImGui_ImplWin32_NewFrame();
         ImGui::NewFrame();
+#else
+        glfwPollEvents();
+        if (glfwWindowShouldClose(g_Window))
+            break;
+
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+#endif
 
         // Menu bar
         if (ImGui::BeginMainMenuBar()) {
@@ -2645,24 +2812,41 @@ int main(int, char**)
             }
         }
 
-        // Rendering
+        // ===== RENDERING =====
+#ifdef _WIN32
         ImGui::Render();
         const float clear_color[4] = { 1.00f, 1.00f, 1.00f, 1.00f };
         g_pd3dDeviceContext->OMSetRenderTargets(1, &g_mainRenderTargetView, nullptr);
         g_pd3dDeviceContext->ClearRenderTargetView(g_mainRenderTargetView, clear_color);
         ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
-
         g_pSwapChain->Present(1, 0);
+#else
+        ImGui::Render();
+        int display_w, display_h;
+        glfwGetFramebufferSize(g_Window, &display_w, &display_h);
+        glViewport(0, 0, display_w, display_h);
+        glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+        glfwSwapBuffers(g_Window);
+#endif
     }
 
     // Cleanup
+#ifdef _WIN32
     ImGui_ImplDX11_Shutdown();
     ImGui_ImplWin32_Shutdown();
     ImGui::DestroyContext();
-
     CleanupDeviceD3D();
     ::DestroyWindow(hwnd);
     ::UnregisterClassW(wc.lpszClassName, wc.hInstance);
+#else
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
+    glfwDestroyWindow(g_Window);
+    glfwTerminate();
+#endif
 
     return 0;
 }
@@ -2705,60 +2889,61 @@ void BuildRule() {
         AppendOutput("'\n");
     }
 }
+#ifdef _WIN32
+    // DirectX Helper functions
+    bool CreateDeviceD3D(HWND hWnd)
+    {
+        DXGI_SWAP_CHAIN_DESC sd;
+        ZeroMemory(&sd, sizeof(sd));
+        sd.BufferCount = 2;
+        sd.BufferDesc.Width = 0;
+        sd.BufferDesc.Height = 0;
+        sd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        sd.BufferDesc.RefreshRate.Numerator = 60;
+        sd.BufferDesc.RefreshRate.Denominator = 1;
+        sd.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
+        sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+        sd.OutputWindow = hWnd;
+        sd.SampleDesc.Count = 1;
+        sd.SampleDesc.Quality = 0;
+        sd.Windowed = TRUE;
+        sd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
 
-// DirectX Helper functions
-bool CreateDeviceD3D(HWND hWnd)
-{
-    DXGI_SWAP_CHAIN_DESC sd;
-    ZeroMemory(&sd, sizeof(sd));
-    sd.BufferCount = 2;
-    sd.BufferDesc.Width = 0;
-    sd.BufferDesc.Height = 0;
-    sd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    sd.BufferDesc.RefreshRate.Numerator = 60;
-    sd.BufferDesc.RefreshRate.Denominator = 1;
-    sd.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
-    sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-    sd.OutputWindow = hWnd;
-    sd.SampleDesc.Count = 1;
-    sd.SampleDesc.Quality = 0;
-    sd.Windowed = TRUE;
-    sd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
+        UINT createDeviceFlags = 0;
+        D3D_FEATURE_LEVEL featureLevel;
+        const D3D_FEATURE_LEVEL featureLevelArray[2] = { D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_0, };
+        HRESULT res = D3D11CreateDeviceAndSwapChain(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, createDeviceFlags, 
+                                                    featureLevelArray, 2, D3D11_SDK_VERSION, &sd, &g_pSwapChain, 
+                                                    &g_pd3dDevice, &featureLevel, &g_pd3dDeviceContext);
+        if (res == DXGI_ERROR_UNSUPPORTED)
+            res = D3D11CreateDeviceAndSwapChain(nullptr, D3D_DRIVER_TYPE_WARP, nullptr, createDeviceFlags, 
+                                            featureLevelArray, 2, D3D11_SDK_VERSION, &sd, &g_pSwapChain, 
+                                            &g_pd3dDevice, &featureLevel, &g_pd3dDeviceContext);
+        if (res != S_OK)
+            return false;
 
-    UINT createDeviceFlags = 0;
-    D3D_FEATURE_LEVEL featureLevel;
-    const D3D_FEATURE_LEVEL featureLevelArray[2] = { D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_0, };
-    HRESULT res = D3D11CreateDeviceAndSwapChain(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, createDeviceFlags, 
-                                                 featureLevelArray, 2, D3D11_SDK_VERSION, &sd, &g_pSwapChain, 
-                                                 &g_pd3dDevice, &featureLevel, &g_pd3dDeviceContext);
-    if (res == DXGI_ERROR_UNSUPPORTED)
-        res = D3D11CreateDeviceAndSwapChain(nullptr, D3D_DRIVER_TYPE_WARP, nullptr, createDeviceFlags, 
-                                           featureLevelArray, 2, D3D11_SDK_VERSION, &sd, &g_pSwapChain, 
-                                           &g_pd3dDevice, &featureLevel, &g_pd3dDeviceContext);
-    if (res != S_OK)
-        return false;
+        CreateRenderTarget();
+        return true;
+    }
 
-    CreateRenderTarget();
-    return true;
-}
+    void CleanupDeviceD3D()
+    {
+        CleanupRenderTarget();
+        if (g_pSwapChain) { g_pSwapChain->Release(); g_pSwapChain = nullptr; }
+        if (g_pd3dDeviceContext) { g_pd3dDeviceContext->Release(); g_pd3dDeviceContext = nullptr; }
+        if (g_pd3dDevice) { g_pd3dDevice->Release(); g_pd3dDevice = nullptr; }
+    }
 
-void CleanupDeviceD3D()
-{
-    CleanupRenderTarget();
-    if (g_pSwapChain) { g_pSwapChain->Release(); g_pSwapChain = nullptr; }
-    if (g_pd3dDeviceContext) { g_pd3dDeviceContext->Release(); g_pd3dDeviceContext = nullptr; }
-    if (g_pd3dDevice) { g_pd3dDevice->Release(); g_pd3dDevice = nullptr; }
-}
+    void CreateRenderTarget()
+    {
+        ID3D11Texture2D* pBackBuffer;
+        g_pSwapChain->GetBuffer(0, IID_PPV_ARGS(&pBackBuffer));
+        g_pd3dDevice->CreateRenderTargetView(pBackBuffer, nullptr, &g_mainRenderTargetView);
+        pBackBuffer->Release();
+    }
 
-void CreateRenderTarget()
-{
-    ID3D11Texture2D* pBackBuffer;
-    g_pSwapChain->GetBuffer(0, IID_PPV_ARGS(&pBackBuffer));
-    g_pd3dDevice->CreateRenderTargetView(pBackBuffer, nullptr, &g_mainRenderTargetView);
-    pBackBuffer->Release();
-}
-
-void CleanupRenderTarget()
-{
-    if (g_mainRenderTargetView) { g_mainRenderTargetView->Release(); g_mainRenderTargetView = nullptr; }
-}
+    void CleanupRenderTarget()
+    {
+        if (g_mainRenderTargetView) { g_mainRenderTargetView->Release(); g_mainRenderTargetView = nullptr; }
+    }
+#endif

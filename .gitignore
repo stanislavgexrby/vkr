@@ -26,6 +26,8 @@ syngt_gui/imgui
 
 # Logs
 *.log
+*.ini
+examples/grammars/*.ini
 
 # OS
 .DS_Store
