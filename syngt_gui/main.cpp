@@ -199,10 +199,10 @@ void RenderDiagram(ImDrawList* drawList, const ImVec2& offset) {
     if (!drawObjects || drawObjects->count() == 0) return;
     
     const float scale = 1.0f;
-    const ImU32 lineColor = IM_COL32(200, 200, 200, 255);
-    const ImU32 selectedColor = IM_COL32(255, 100, 100, 255);
-    const ImU32 hoveredColor = IM_COL32(100, 255, 100, 255);
-    const ImU32 textColor = IM_COL32(255, 255, 255, 255);
+    const ImU32 lineColor = IM_COL32(0, 0, 0, 255);
+    const ImU32 selectedColor = IM_COL32(25, 55, 95, 255);
+    const ImU32 hoveredColor = IM_COL32(100, 150, 255, 255);
+    const ImU32 textColor = IM_COL32(80, 80, 80, 255);
     
     // DEBUG
     // static bool debugPrinted = false;
@@ -1823,7 +1823,7 @@ int main(int, char**)
     io.IniFilename = "syngt.ini";
 
     // Setup style
-    ImGui::StyleColorsDark();
+    ImGui::StyleColorsLight();
     
     // Color style
     ImGuiStyle& style = ImGui::GetStyle();
@@ -1831,6 +1831,61 @@ int main(int, char**)
     style.FrameRounding = 3.0f;
     style.GrabRounding = 3.0f;
     style.ScrollbarRounding = 3.0f;
+
+    // Main colors
+    style.Colors[ImGuiCol_Text] = ImVec4(0.10f, 0.10f, 0.10f, 1.00f);
+    style.Colors[ImGuiCol_TextDisabled] = ImVec4(0.60f, 0.60f, 0.60f, 1.00f);
+    style.Colors[ImGuiCol_WindowBg] = ImVec4(0.95f, 0.95f, 0.95f, 1.00f);
+    style.Colors[ImGuiCol_ChildBg] = ImVec4(0.98f, 0.98f, 0.98f, 1.00f);
+    style.Colors[ImGuiCol_PopupBg] = ImVec4(0.98f, 0.98f, 0.98f, 1.00f);
+    style.Colors[ImGuiCol_Border] = ImVec4(0.85f, 0.85f, 0.85f, 1.00f);
+    style.Colors[ImGuiCol_BorderShadow] = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
+    style.Colors[ImGuiCol_FrameBg] = ImVec4(1.00f, 1.00f, 1.00f, 1.00f);
+    style.Colors[ImGuiCol_FrameBgHovered] = ImVec4(0.90f, 0.93f, 1.00f, 1.00f);
+    style.Colors[ImGuiCol_FrameBgActive] = ImVec4(0.80f, 0.87f, 1.00f, 1.00f);
+    style.Colors[ImGuiCol_TitleBg] = ImVec4(0.92f, 0.92f, 0.92f, 1.00f);
+    style.Colors[ImGuiCol_TitleBgActive] = ImVec4(0.25f, 0.55f, 0.95f, 1.00f);
+    style.Colors[ImGuiCol_TitleBgCollapsed] = ImVec4(0.92f, 0.92f, 0.92f, 1.00f);
+    style.Colors[ImGuiCol_MenuBarBg] = ImVec4(0.92f, 0.92f, 0.92f, 1.00f);
+    style.Colors[ImGuiCol_ScrollbarBg] = ImVec4(0.98f, 0.98f, 0.98f, 1.00f);
+    style.Colors[ImGuiCol_ScrollbarGrab] = ImVec4(0.75f, 0.75f, 0.75f, 1.00f);
+    style.Colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4(0.65f, 0.65f, 0.65f, 1.00f);
+    style.Colors[ImGuiCol_ScrollbarGrabActive] = ImVec4(0.55f, 0.55f, 0.55f, 1.00f);
+    style.Colors[ImGuiCol_CheckMark] = ImVec4(0.25f, 0.55f, 0.95f, 1.00f);
+    style.Colors[ImGuiCol_SliderGrab] = ImVec4(0.35f, 0.65f, 1.00f, 1.00f);
+    style.Colors[ImGuiCol_SliderGrabActive] = ImVec4(0.25f, 0.55f, 0.95f, 1.00f);
+    style.Colors[ImGuiCol_Button] = ImVec4(0.25f, 0.55f, 0.95f, 1.00f);
+    style.Colors[ImGuiCol_ButtonHovered] = ImVec4(0.35f, 0.65f, 1.00f, 1.00f);
+    style.Colors[ImGuiCol_ButtonActive] = ImVec4(0.15f, 0.45f, 0.85f, 1.00f);
+    style.Colors[ImGuiCol_Header] = ImVec4(0.25f, 0.55f, 0.95f, 1.00f);
+    style.Colors[ImGuiCol_HeaderHovered] = ImVec4(0.35f, 0.65f, 1.00f, 1.00f);
+    style.Colors[ImGuiCol_HeaderActive] = ImVec4(0.15f, 0.45f, 0.85f, 1.00f);
+    style.Colors[ImGuiCol_Separator] = ImVec4(0.80f, 0.80f, 0.80f, 1.00f);
+    style.Colors[ImGuiCol_SeparatorHovered] = ImVec4(0.60f, 0.60f, 0.60f, 1.00f);
+    style.Colors[ImGuiCol_SeparatorActive] = ImVec4(0.40f, 0.40f, 0.40f, 1.00f);
+    style.Colors[ImGuiCol_ResizeGrip] = ImVec4(0.25f, 0.55f, 0.95f, 0.30f);
+    style.Colors[ImGuiCol_ResizeGripHovered] = ImVec4(0.25f, 0.55f, 0.95f, 0.67f);
+    style.Colors[ImGuiCol_ResizeGripActive] = ImVec4(0.25f, 0.55f, 0.95f, 0.95f);
+    style.Colors[ImGuiCol_Tab] = ImVec4(0.80f, 0.85f, 0.95f, 1.00f);
+    style.Colors[ImGuiCol_TabHovered] = ImVec4(0.25f, 0.55f, 0.95f, 1.00f);
+    style.Colors[ImGuiCol_TabActive] = ImVec4(0.25f, 0.55f, 0.95f, 1.00f);
+    style.Colors[ImGuiCol_TabUnfocused] = ImVec4(0.80f, 0.85f, 0.95f, 1.00f);
+    style.Colors[ImGuiCol_TabUnfocusedActive] = ImVec4(0.25f, 0.55f, 0.95f, 1.00f);
+    style.Colors[ImGuiCol_PlotLines] = ImVec4(0.25f, 0.55f, 0.95f, 1.00f);
+    style.Colors[ImGuiCol_PlotLinesHovered] = ImVec4(0.35f, 0.65f, 1.00f, 1.00f);
+    style.Colors[ImGuiCol_PlotHistogram] = ImVec4(0.25f, 0.55f, 0.95f, 1.00f);
+    style.Colors[ImGuiCol_PlotHistogramHovered] = ImVec4(0.35f, 0.65f, 1.00f, 1.00f);
+    style.Colors[ImGuiCol_TableHeaderBg] = ImVec4(0.92f, 0.92f, 0.92f, 1.00f);
+    style.Colors[ImGuiCol_TableBorderStrong] = ImVec4(0.80f, 0.80f, 0.80f, 1.00f);
+    style.Colors[ImGuiCol_TableBorderLight] = ImVec4(0.90f, 0.90f, 0.90f, 1.00f);
+    style.Colors[ImGuiCol_TableRowBg] = ImVec4(1.00f, 1.00f, 1.00f, 1.00f);
+    style.Colors[ImGuiCol_TableRowBgAlt] = ImVec4(0.98f, 0.98f, 0.98f, 1.00f);
+    style.Colors[ImGuiCol_TextSelectedBg] = ImVec4(0.25f, 0.55f, 0.95f, 0.35f);
+    style.Colors[ImGuiCol_DragDropTarget] = ImVec4(0.25f, 0.55f, 0.95f, 0.95f);
+    style.Colors[ImGuiCol_NavHighlight] = ImVec4(0.25f, 0.55f, 0.95f, 1.00f);
+    style.Colors[ImGuiCol_NavWindowingHighlight] = ImVec4(1.00f, 1.00f, 1.00f, 0.70f);
+    style.Colors[ImGuiCol_NavWindowingDimBg] = ImVec4(0.80f, 0.80f, 0.80f, 0.20f);
+    style.Colors[ImGuiCol_ModalWindowDimBg] = ImVec4(0.20f, 0.20f, 0.20f, 0.35f);
 
     // Setup Platform/Renderer backends
     ImGui_ImplWin32_Init(hwnd);
@@ -2212,7 +2267,7 @@ int main(int, char**)
                         ImVec2 clipMax = ImVec2(canvasPos.x + childSize.x, canvasPos.y + childSize.y);
                         
                         drawList->PushClipRect(clipMin, clipMax, true);
-                        drawList->AddRectFilled(clipMin, clipMax, IM_COL32(30, 30, 35, 255));
+                        drawList->AddRectFilled(clipMin, clipMax, IM_COL32(248, 248, 248, 255));
                         
                         RenderDiagram(drawList, offset);
                         
@@ -2228,8 +2283,8 @@ int main(int, char**)
                                 std::max(boxSelectStart.y, currentMouse.y)
                             );
                             
-                            drawList->AddRectFilled(rectMin, rectMax, IM_COL32(100, 150, 255, 50));
-                            drawList->AddRect(rectMin, rectMax, IM_COL32(100, 150, 255, 200), 0.0f, 0, 2.0f);
+                            drawList->AddRectFilled(rectMin, rectMax, IM_COL32(70, 130, 255, 80));
+                            drawList->AddRect(rectMin, rectMax, IM_COL32(70, 130, 255, 200), 0.0f, 0, 2.0f);
                         }
                         
                         drawList->PopClipRect();
@@ -2259,7 +2314,7 @@ int main(int, char**)
                             infoDrawList->AddRectFilled(
                                 ImVec2(infoPos.x - 8, infoPos.y - 6),
                                 ImVec2(infoPos.x + totalWidth, infoPos.y + frameHeight + 4),
-                                IM_COL32(20, 20, 25, 220),
+                                IM_COL32(240, 240, 245, 220),
                                 4.0f
                             );
                             
@@ -2289,9 +2344,9 @@ int main(int, char**)
         ImGui::EndChild();
         
         if (activeLeftTab == 1) {
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.3f, 0.3f, 0.3f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.4f, 0.4f, 0.4f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.5f, 0.5f, 0.5f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.8f, 0.8f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.7f, 0.7f, 0.7f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.6f, 0.6f, 0.6f, 1.0f));
             ImGui::Button("##left_hsplitter", ImVec2(-1, 8.0f));
             bool leftHsplitterActive = ImGui::IsItemActive();
             bool leftHsplitterHovered = ImGui::IsItemHovered();
@@ -2324,9 +2379,9 @@ int main(int, char**)
         ImGui::EndChild();
 
         ImGui::SameLine();
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.3f, 0.3f, 0.3f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.4f, 0.4f, 0.4f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.5f, 0.5f, 0.5f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.8f, 0.8f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.7f, 0.7f, 0.7f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.6f, 0.6f, 0.6f, 1.0f));
         ImGui::Button("##vsplitter", ImVec2(8.0f, -1));
         bool vsplitterActive = ImGui::IsItemActive();
         bool vsplitterHovered = ImGui::IsItemHovered();
@@ -2364,9 +2419,9 @@ int main(int, char**)
         }
         ImGui::EndChild();
         
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.3f, 0.3f, 0.3f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.4f, 0.4f, 0.4f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.5f, 0.5f, 0.5f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.8f, 0.8f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.7f, 0.7f, 0.7f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.6f, 0.6f, 0.6f, 1.0f));
         ImGui::Button("##hsplitter", ImVec2(-1, 8.0f));
         bool hsplitterActive = ImGui::IsItemActive();
         bool hsplitterHovered = ImGui::IsItemHovered();
@@ -2548,7 +2603,7 @@ int main(int, char**)
 
         // Rendering
         ImGui::Render();
-        const float clear_color[4] = { 0.1f, 0.1f, 0.12f, 1.0f };
+        const float clear_color[4] = { 1.00f, 1.00f, 1.00f, 1.00f };
         g_pd3dDeviceContext->OMSetRenderTargets(1, &g_mainRenderTargetView, nullptr);
         g_pd3dDeviceContext->ClearRenderTargetView(g_mainRenderTargetView, clear_color);
         ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
