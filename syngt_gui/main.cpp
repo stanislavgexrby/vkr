@@ -61,6 +61,40 @@ void BuildRule();
     }
 #endif
 
+#ifndef _WIN32
+    #include <cerrno>
+    #include <cstring>
+    
+    /**
+     * @brief Safe string copy for non-Windows platforms
+     * @param dest Destination buffer
+     * @param destsz Size of destination buffer
+     * @param src Source string
+     * @return 0 on success, EINVAL if parameters invalid, ERANGE if buffer too small
+     */
+    inline errno_t strcpy_s(char* dest, size_t destsz, const char* src) {
+        if (!dest || destsz == 0) {
+            return EINVAL;
+        }
+        
+        if (!src) {
+            dest[0] = '\0';
+            return EINVAL;
+        }
+        
+        size_t len = std::strlen(src);
+        if (len >= destsz) {
+            // Buffer too small - truncate and set error
+            dest[0] = '\0';
+            return ERANGE;
+        }
+        
+        // Safe copy including null terminator
+        std::memcpy(dest, src, len + 1);
+        return 0;
+    }
+#endif
+
 static char ruleText[4096] = "";
 static char grammarText[1024 * 64] = "";
 static char outputText[1024 * 64] = "";
