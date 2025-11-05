@@ -2023,11 +2023,20 @@ int main(int, char**)
                                 int objX = obj->x();
                                 int objY = obj->y();
                                 int objEndX = obj->endX();
+                                int objEndY = objY;
+                                
+                                int objType = obj->getType();
+                                if (objType == syngt::graphics::ctDrawObjectTerminal) {
+                                    objEndY = objY + 20;
+                                } else if (objType == syngt::graphics::ctDrawObjectNonTerminal) {
+                                    objEndY = objY + 20;
+                                }
                                 
                                 if (objX < minX) minX = objX;
                                 if (objY < minY) minY = objY;
                                 if (objEndX > maxX) maxX = objEndX;
                                 if (objY > maxY) maxY = objY;
+                                if (objEndY > maxY) maxY = objEndY;
                             }
                         }
                         

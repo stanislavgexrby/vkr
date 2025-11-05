@@ -134,7 +134,6 @@ DrawObject* REOr::drawObjectsToRight(
     std::vector<const RETree*> alternatives;
     flatten(this, alternatives);
 
-    // ===== Левая точка разветвления =====
     int curWard = ((ward == cwBACKWARD) && fromDO->needSpike()) ?
         cwBACKWARD : cwNONE;
 
@@ -156,12 +155,15 @@ DrawObject* REOr::drawObjectsToRight(
     list->add(std::move(leftPoint));
 
     std::vector<DrawObject*> branchEnds;
-    const int verticalSpacing = 60;
+    std::vector<int> branchHeights;
+    
+    const int minVerticalSpacing = 60;
     int maxBranchHeight = 0;
+    int currentY = baseY;
 
     for (size_t i = 0; i < alternatives.size(); ++i) {
         DrawObjectPoint* branchStart = nullptr;
-        int branchY = baseY + static_cast<int>(i) * verticalSpacing;
+        int branchY = currentY;
 
         if (i == 0) {
             branchStart = leftPtr;
@@ -185,6 +187,12 @@ DrawObject* REOr::drawObjectsToRight(
         }
 
         branchEnds.push_back(branchEnd);
+        branchHeights.push_back(branchHeight);
+        
+        if (i < alternatives.size() - 1) {
+            int spacing = std::max(branchHeight + 20, minVerticalSpacing);
+            currentY += spacing;
+        }
     }
 
     int maxEndX = baseX;
@@ -195,9 +203,14 @@ DrawObject* REOr::drawObjectsToRight(
     maxEndX += MinArrowLength;
 
     DrawObjectPoint* currentPoint = nullptr;
+    currentY = baseY;
     
     for (int i = static_cast<int>(branchEnds.size()) - 1; i >= 0; --i) {
-        int branchY = baseY + i * verticalSpacing;
+        int branchY = baseY;
+        for (int j = 0; j < i; ++j) {
+            int spacing = std::max(branchHeights[j] + 20, minVerticalSpacing);
+            branchY += spacing;
+        }
         
         if (i == static_cast<int>(branchEnds.size()) - 1) {
             auto joinPoint = std::make_unique<DrawObjectPoint>();
@@ -219,7 +232,14 @@ DrawObject* REOr::drawObjectsToRight(
     
     DrawObject* finalPoint = currentPoint;
     
-    height = static_cast<int>(alternatives.size() - 1) * verticalSpacing + maxBranchHeight;
+    int totalHeight = 0;
+    for (size_t i = 0; i < branchHeights.size(); ++i) {
+        totalHeight += branchHeights[i];
+        if (i < branchHeights.size() - 1) {
+            totalHeight += 20;
+        }
+    }
+    height = totalHeight;
 
     return finalPoint;
 }
