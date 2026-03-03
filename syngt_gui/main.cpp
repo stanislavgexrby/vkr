@@ -55,7 +55,7 @@ void ExtractRule();
 void Substitute();
 void AddNonTerminalReferenceToGrammar(const std::string& name);
 void FindAndCreateMissingNonTerminals(const std::string& rule);
-void DrawArrowhead(ImDrawList* drawList, ImVec2 from, ImVec2 to, ImU32 color);
+void DrawArrowhead(ImDrawList* drawList, ImVec2 from, ImVec2 to, ImU32 color, float scale = 1.0f);
 void LoadRuleToEditor();
 void BuildRule();
 
@@ -130,6 +130,11 @@ static std::string s_extractActiveNT;
 static int activeLeftTab = 1; // 0 = Grammar Editor, 1 = Syntax Diagram
 static bool isDragging = false;
 static ImVec2 lastMousePos;
+static float diagramScale = 1.0f;
+// Stable bounds — updated only when not dragging to prevent offset jumps during drag
+static int s_stableMinX = 0, s_stableMinY = 0;
+static int s_stableMaxX = 100, s_stableMaxY = 100;
+static bool s_stableBoundsValid = false;
 static syngt::graphics::DrawObject* hoveredObject = nullptr;
 static syngt::graphics::DrawObject* contextMenuObject = nullptr;
 static bool showAddTerminalDialog = false;
@@ -141,7 +146,7 @@ static bool useOrOperator = false;
 
 // Layout sizes
 static float leftWidth = 800.0f;
-static float rightPanelButtonsHeight = 200.0f;
+static float rightPanelButtonsHeight = 320.0f;
 
 // Editor state
 static bool isBoxSelecting = false;
@@ -289,21 +294,21 @@ void ClearOutput() {
 }
 
 // Syntax Grammar
-void DrawArrowhead(ImDrawList* drawList, ImVec2 from, ImVec2 to, ImU32 color) {
+void DrawArrowhead(ImDrawList* drawList, ImVec2 from, ImVec2 to, ImU32 color, float scale) {
     ImVec2 dir = ImVec2(to.x - from.x, to.y - from.y);
     float length = sqrtf(dir.x * dir.x + dir.y * dir.y);
     if (length < 0.001f) return;
-    
+
     dir.x /= length;
     dir.y /= length;
-    
-    const float arrowSize = 8.0f;
+
+    const float arrowSize = 8.0f * scale;
     const float arrowAngle = 0.4f;
-    
-    ImVec2 tip = ImVec2(to.x - dir.x * 2, to.y - dir.y * 2);
-    
+
+    ImVec2 tip = ImVec2(to.x - dir.x * 2 * scale, to.y - dir.y * 2 * scale);
+
     ImVec2 perp = ImVec2(-dir.y, dir.x);
-    
+
     ImVec2 left = ImVec2(
         tip.x - dir.x * arrowSize + perp.x * arrowSize * arrowAngle,
         tip.y - dir.y * arrowSize + perp.y * arrowSize * arrowAngle
@@ -312,14 +317,13 @@ void DrawArrowhead(ImDrawList* drawList, ImVec2 from, ImVec2 to, ImU32 color) {
         tip.x - dir.x * arrowSize - perp.x * arrowSize * arrowAngle,
         tip.y - dir.y * arrowSize - perp.y * arrowSize * arrowAngle
     );
-    
+
     drawList->AddTriangleFilled(tip, left, right, color);
 }
 
-void RenderDiagram(ImDrawList* drawList, const ImVec2& offset) {
+void RenderDiagram(ImDrawList* drawList, const ImVec2& offset, float scale) {
     if (!drawObjects || drawObjects->count() == 0) return;
-    
-    const float scale = 1.0f;
+
     const ImU32 lineColor = IM_COL32(0, 0, 0, 255);
     const ImU32 selectedColor = IM_COL32(25, 55, 95, 255);
     const ImU32 hoveredColor = IM_COL32(100, 150, 255, 255);
@@ -402,20 +406,14 @@ void RenderDiagram(ImDrawList* drawList, const ImVec2& offset) {
                 drawList->AddLine(fromPos, toPos, currentColor, thickness);
                 
                 int ward = arrow->ward();
-                float dy = toPos.y - fromPos.y;
-
-                if (ward == 1) {  // FORWARD
-                    if (dy < -5) {
-                        DrawArrowhead(drawList, toPos, fromPos, currentColor);
-                    } else {
-                        DrawArrowhead(drawList, fromPos, toPos, currentColor);
-                    }
-                } else if (ward == 2 || ward < 0) {  // BACKWARD
-                    DrawArrowhead(drawList, toPos, fromPos, currentColor);
+                if (ward > 0) {  // cwFORWARD: arrowhead at destination
+                    DrawArrowhead(drawList, fromPos, toPos, currentColor, scale);
+                } else if (ward < 0) {  // cwBACKWARD: arrowhead at source
+                    DrawArrowhead(drawList, toPos, fromPos, currentColor, scale);
                 }
             }
         }
-        
+
         int type = obj->getType();
         if (type == syngt::graphics::ctDrawObjectPoint) {
             auto point = dynamic_cast<syngt::graphics::DrawObjectPoint*>(obj);
@@ -426,23 +424,17 @@ void RenderDiagram(ImDrawList* drawList, const ImVec2& offset) {
                     if (from) {
                         float x1 = offset.x + from->endX() * scale;
                         float y1 = offset.y + from->y() * scale;
-                        
+
                         ImVec2 fromPos = ImVec2(x1, y1);
                         ImVec2 toPos = ImVec2(x, y);
-                        
+
                         drawList->AddLine(fromPos, toPos, currentColor, thickness);
-                        
+
                         int ward = arrow2->ward();
-                        float dy = toPos.y - fromPos.y;
-                        
-                        if (ward == 1) {  // FORWARD
-                            if (dy < -5) {
-                                DrawArrowhead(drawList, toPos, fromPos, currentColor);
-                            } else {
-                                DrawArrowhead(drawList, fromPos, toPos, currentColor);
-                            }
-                        } else if (ward == 2 || ward < 0) {  // BACKWARD
-                            DrawArrowhead(drawList, toPos, fromPos, currentColor);
+                        if (ward > 0) {  // cwFORWARD: arrowhead at destination
+                            DrawArrowhead(drawList, fromPos, toPos, currentColor, scale);
+                        } else if (ward < 0) {  // cwBACKWARD: arrowhead at source
+                            DrawArrowhead(drawList, toPos, fromPos, currentColor, scale);
                         }
                     }
                 }
@@ -472,45 +464,53 @@ void RenderDiagram(ImDrawList* drawList, const ImVec2& offset) {
             float w = obj->getLength() * scale / 2.0f;
             float h = 20.0f * scale;
             drawList->AddEllipse(ImVec2(x + w, y), ImVec2(w, h), currentColor, 0, 0, thickness);
-            
+
             auto leaf = dynamic_cast<syngt::graphics::DrawObjectLeaf*>(obj);
             if (leaf) {
                 std::string name = leaf->name();
+                float fontSize = ImGui::GetFontSize() * scale;
                 ImVec2 textSize = ImGui::CalcTextSize(name.c_str());
-                drawList->AddText(ImVec2(x + w - textSize.x/2, y - textSize.y/2), textColor, name.c_str());
+                textSize.x *= scale;
+                textSize.y *= scale;
+                drawList->AddText(ImGui::GetFont(), fontSize,
+                    ImVec2(x + w - textSize.x/2, y - textSize.y/2), textColor, name.c_str());
             }
         }
         else if (type == syngt::graphics::ctDrawObjectNonTerminal) {
             float w = obj->getLength() * scale;
             float h = 40.0f * scale;
             drawList->AddRect(ImVec2(x, y - h/2), ImVec2(x + w, y + h/2), currentColor, 0.0f, 0, thickness);
-            
+
             auto leaf = dynamic_cast<syngt::graphics::DrawObjectLeaf*>(obj);
             if (leaf) {
                 std::string name = leaf->name();
+                float fontSize = ImGui::GetFontSize() * scale;
                 ImVec2 textSize = ImGui::CalcTextSize(name.c_str());
-                drawList->AddText(ImVec2(x + w/2 - textSize.x/2, y - textSize.y/2), textColor, name.c_str());
+                textSize.x *= scale;
+                textSize.y *= scale;
+                drawList->AddText(ImGui::GetFont(), fontSize,
+                    ImVec2(x + w/2 - textSize.x/2, y - textSize.y/2), textColor, name.c_str());
             }
         }
         else if (type == syngt::graphics::ctDrawObjectFirst) {
             drawList->AddTriangleFilled(
-                ImVec2(x, y - 10),
-                ImVec2(x, y + 10),
-                ImVec2(x + 15, y),
+                ImVec2(x, y - 10 * scale),
+                ImVec2(x, y + 10 * scale),
+                ImVec2(x + 15 * scale, y),
                 currentColor
             );
         }
         else if (type == syngt::graphics::ctDrawObjectLast) {
             drawList->AddTriangleFilled(
-                ImVec2(x + 15, y - 10),
-                ImVec2(x + 15, y + 10),
+                ImVec2(x + 15 * scale, y - 10 * scale),
+                ImVec2(x + 15 * scale, y + 10 * scale),
                 ImVec2(x, y),
                 currentColor
             );
         }
-        else if (type == syngt::graphics::ctDrawObjectPoint || 
+        else if (type == syngt::graphics::ctDrawObjectPoint ||
                  type == syngt::graphics::ctDrawObjectExtendedPoint) {
-            float radius = (obj->selected() || obj == hoveredObject) ? 4.0f : 3.0f;
+            float radius = ((obj->selected() || obj == hoveredObject) ? 4.0f : 3.0f) * scale;
             drawList->AddCircleFilled(ImVec2(x, y), radius, currentColor);
         }
     }
@@ -519,6 +519,7 @@ void RenderDiagram(ImDrawList* drawList, const ImVec2& offset) {
 void UpdateDiagram() {
     if (!grammar) {
         drawObjects.reset();
+        s_stableBoundsValid = false;
         return;
     }
     
@@ -588,26 +589,36 @@ void UpdateDiagram() {
         AppendOutput("\n");
     }
 
+    // Invalidate stable bounds so they're recomputed on next frame
+    s_stableBoundsValid = false;
+
     LoadRuleToEditor();
 }
 
-syngt::graphics::DrawObject* FindDrawObjectAt(const ImVec2& pos, const ImVec2& offset) {
+syngt::graphics::DrawObject* FindDrawObjectAt(const ImVec2& pos, const ImVec2& offset, float scale) {
     if (!drawObjects || drawObjects->count() == 0) return nullptr;
-    
-    const float scale = 1.0f;
-    
+
+    int logicX = static_cast<int>((pos.x - offset.x) / scale);
+    int logicY = static_cast<int>((pos.y - offset.y) / scale);
+
     for (int i = drawObjects->count() - 1; i >= 0; --i) {
         syngt::graphics::DrawObject* obj = (*drawObjects)[i];
         if (!obj) continue;
-        
-        int screenX = static_cast<int>((pos.x - offset.x) / scale);
-        int screenY = static_cast<int>((pos.y - offset.y) / scale);
-        
-        if (obj->internalPoint(screenX, screenY)) {
+
+        // Skip structural objects — they can't be deleted and shouldn't be selectable
+        int t = obj->getType();
+        if (t == syngt::graphics::ctDrawObjectFirst ||
+            t == syngt::graphics::ctDrawObjectLast  ||
+            t == syngt::graphics::ctDrawObjectPoint ||
+            t == syngt::graphics::ctDrawObjectExtendedPoint) {
+            continue;
+        }
+
+        if (obj->internalPoint(logicX, logicY)) {
             return obj;
         }
     }
-    
+
     return nullptr;
 }
 
@@ -1056,13 +1067,16 @@ void DeleteSelectedObjects() {
                 while (end < ruleBody.length() && isspace(ruleBody[end])) {
                     end++;
                 }
-                
-                if (end < ruleBody.length() && (ruleBody[end] == ',' || ruleBody[end] == ';')) {
+
+                if (end < ruleBody.length() && ruleBody[end] == ',') {
+                    // Following AND separator: consume it ("sym," → "")
                     end++;
                     while (end < ruleBody.length() && isspace(ruleBody[end])) {
                         end++;
                     }
                 } else {
+                    // No following ',' (either ';' or end of alternative):
+                    // consume the preceding separator instead (",sym" or ";sym" → "")
                     if (start > 0) {
                         size_t beforePos = start - 1;
                         while (beforePos > 0 && isspace(ruleBody[beforePos])) {
@@ -1076,7 +1090,7 @@ void DeleteSelectedObjects() {
                         }
                     }
                 }
-                
+
                 ruleBody.erase(start, end - start);
             }
         }
@@ -1678,9 +1692,11 @@ void ParseGrammar() {
         AppendOutput("Grammar parsed successfully!\n\n");
         
         char stats[512];
-        snprintf(stats, sizeof(stats), 
+        // Subtract 1 to exclude the implicit epsilon terminal at index 0
+        int terminalCount = std::max(0, grammar->terminals()->getCount() - 1);
+        snprintf(stats, sizeof(stats),
                  "Terminals: %d\nNon-terminals: %zu\nSemantics: %d\nMacros: %d\n",
-                 grammar->terminals()->getCount(),
+                 terminalCount,
                  grammar->getNonTerminals().size(),
                  grammar->semantics()->getCount(),
                  grammar->macros()->getCount());
@@ -2599,7 +2615,7 @@ int main(int, char**)
                         
                         // int minX = 0, minY = 0, maxX = static_cast<int>(diagramWidth);
                         // int maxY = static_cast<int>(diagramHeight);
-                        int minX = INT_MAX, minY = INT_MAX, maxX = 0, maxY = 0;
+                        int minX = INT_MAX, minY = INT_MAX, maxX = INT_MIN, maxY = INT_MIN;
 
                         for (int i = 0; i < drawObjects->count(); ++i) {
                             auto* obj = (*drawObjects)[i];
@@ -2607,35 +2623,56 @@ int main(int, char**)
                                 int objX = obj->x();
                                 int objY = obj->y();
                                 int objEndX = obj->endX();
-                                int objEndY = objY;
-                                
+
                                 int objType = obj->getType();
-                                if (objType == syngt::graphics::ctDrawObjectTerminal) {
-                                    objEndY = objY + 20;
-                                } else if (objType == syngt::graphics::ctDrawObjectNonTerminal) {
-                                    objEndY = objY + 20;
+                                int topY  = objY;
+                                int botY  = objY;
+                                if (objType == syngt::graphics::ctDrawObjectTerminal ||
+                                    objType == syngt::graphics::ctDrawObjectNonTerminal) {
+                                    topY = objY - 20;
+                                    botY = objY + 20;
+                                } else if (objType == syngt::graphics::ctDrawObjectFirst ||
+                                           objType == syngt::graphics::ctDrawObjectLast) {
+                                    topY = objY - 10;
+                                    botY = objY + 10;
                                 }
-                                
-                                if (objX < minX) minX = objX;
-                                if (objY < minY) minY = objY;
+
+                                if (objX  < minX) minX = objX;
+                                if (topY  < minY) minY = topY;
                                 if (objEndX > maxX) maxX = objEndX;
-                                if (objY > maxY) maxY = objY;
-                                if (objEndY > maxY) maxY = objEndY;
+                                if (botY  > maxY) maxY = botY;
                             }
                         }
 
                         if (minX == INT_MAX) minX = 0;
                         if (minY == INT_MAX) minY = 0;
-                        if (maxX < minX) maxX = minX + 100;
-                        if (maxY < minY) maxY = minY + 100;
+                        if (maxX == INT_MIN) maxX = minX + 100;
+                        if (maxY == INT_MIN) maxY = minY + 100;
+
+                        // Update stable bounds only when not dragging to prevent
+                        // offset jumps while objects are being moved
+                        if (!s_stableBoundsValid || !isDragging) {
+                            s_stableMinX = minX;
+                            s_stableMinY = minY;
+                            s_stableMaxX = maxX;
+                            s_stableMaxY = maxY;
+                            s_stableBoundsValid = true;
+                        }
+
+                        // Canvas size tracks current bounds (can grow when dragging out)
+                        // but offset is anchored to stable bounds (no jumps during drag)
+                        int canvasMinX = std::min(minX, s_stableMinX);
+                        int canvasMinY = std::min(minY, s_stableMinY);
+                        int canvasMaxX = std::max(maxX, s_stableMaxX);
+                        int canvasMaxY = std::max(maxY, s_stableMaxY);
 
                         const float padding = 100.0f;
-                        float canvasWidth = maxX - minX + padding * 2;
-                        float canvasHeight = maxY - minY + padding * 2;
+                        float canvasWidth  = (canvasMaxX - canvasMinX) * diagramScale + padding * 2;
+                        float canvasHeight = (canvasMaxY - canvasMinY) * diagramScale + padding * 2;
 
                         ImVec2 canvasPos = ImGui::GetCursorScreenPos();
-                        ImVec2 offset = ImVec2(canvasPos.x + padding - minX, 
-                                            canvasPos.y + padding - minY);
+                        ImVec2 offset = ImVec2(canvasPos.x + padding - s_stableMinX * diagramScale,
+                                               canvasPos.y + padding - s_stableMinY * diagramScale);
 
                         ImGui::Dummy(ImVec2(canvasWidth, canvasHeight));
 
@@ -2645,24 +2682,31 @@ int main(int, char**)
                         
                         ImVec2 mousePos = ImGui::GetMousePos();
                         
-                        // Hoving
+                        // Ctrl+scroll to zoom
+                        if (isHovered && ImGui::GetIO().KeyCtrl && ImGui::GetIO().MouseWheel != 0.0f) {
+                            float delta = ImGui::GetIO().MouseWheel * 0.1f;
+                            diagramScale = std::max(0.25f, std::min(4.0f, diagramScale + delta));
+                            ImGui::GetIO().MouseWheel = 0.0f;  // consume event to prevent scrolling
+                        }
+
+                        // Hovering
                         if (isHovered && !isDragging && !isBoxSelecting) {
-                            hoveredObject = FindDrawObjectAt(mousePos, offset);
+                            hoveredObject = FindDrawObjectAt(mousePos, offset, diagramScale);
                             if (hoveredObject) {
                                 ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
                             }
                         } else if (!isHovered) {
                             hoveredObject = nullptr;
                         }
-                        
+
                         // Left click
                         if (isHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-                            syngt::graphics::DrawObject* clicked = FindDrawObjectAt(mousePos, offset);
-                            
+                            syngt::graphics::DrawObject* clicked = FindDrawObjectAt(mousePos, offset, diagramScale);
+
                             if (clicked) {
                                 isDragging = true;
                                 lastMousePos = mousePos;
-                                
+
                                 if (!ImGui::GetIO().KeyCtrl) {
                                     drawObjects->unselectAll();
                                 }
@@ -2670,13 +2714,13 @@ int main(int, char**)
                             } else {
                                 isBoxSelecting = true;
                                 boxSelectStart = mousePos;
-                                
+
                                 if (!ImGui::GetIO().KeyCtrl) {
                                     drawObjects->unselectAll();
                                 }
                             }
                         }
-                        
+
                         // Dragging
                         if (isDragging) {
                             if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
@@ -2685,40 +2729,50 @@ int main(int, char**)
                                     currentMousePos.x - lastMousePos.x,
                                     currentMousePos.y - lastMousePos.y
                                 );
-                                
+
                                 if (drawObjects && (delta.x != 0 || delta.y != 0)) {
                                     drawObjects->selectedMove(
-                                        static_cast<int>(delta.x),
-                                        static_cast<int>(delta.y)
+                                        static_cast<int>(delta.x / diagramScale),
+                                        static_cast<int>(delta.y / diagramScale)
                                     );
                                 }
-                                
+
                                 lastMousePos = currentMousePos;
                             } else {
                                 isDragging = false;
                             }
                         }
-                        
+
                         // Box selecting
                         if (isBoxSelecting) {
                             if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
                                 ImVec2 boxSelectEnd = ImGui::GetMousePos();
-                                
-                                int left = static_cast<int>(std::min(boxSelectStart.x, boxSelectEnd.x) - offset.x);
-                                int top = static_cast<int>(std::min(boxSelectStart.y, boxSelectEnd.y) - offset.y);
-                                int right = static_cast<int>(std::max(boxSelectStart.x, boxSelectEnd.x) - offset.x);
-                                int bottom = static_cast<int>(std::max(boxSelectStart.y, boxSelectEnd.y) - offset.y);
+
+                                int left   = static_cast<int>((std::min(boxSelectStart.x, boxSelectEnd.x) - offset.x) / diagramScale);
+                                int top    = static_cast<int>((std::min(boxSelectStart.y, boxSelectEnd.y) - offset.y) / diagramScale);
+                                int right  = static_cast<int>((std::max(boxSelectStart.x, boxSelectEnd.x) - offset.x) / diagramScale);
+                                int bottom = static_cast<int>((std::max(boxSelectStart.y, boxSelectEnd.y) - offset.y) / diagramScale);
                                 
                                 if (drawObjects) {
                                     for (int i = 0; i < drawObjects->count(); ++i) {
                                         auto* obj = (*drawObjects)[i];
-                                        if (obj) {
-                                            int objX = obj->x();
-                                            int objY = obj->y();
-                                            
-                                            if (objX >= left && objX <= right && objY >= top && objY <= bottom) {
-                                                drawObjects->changeSelection(obj);
-                                            }
+                                        if (!obj) continue;
+
+                                        int t = obj->getType();
+                                        if (t != syngt::graphics::ctDrawObjectTerminal &&
+                                            t != syngt::graphics::ctDrawObjectNonTerminal) {
+                                            continue;
+                                        }
+
+                                        // AABB intersection: select if box touches any part of the object
+                                        int objLeft   = obj->x();
+                                        int objRight  = obj->endX();
+                                        int objTop    = obj->y() - 20;
+                                        int objBottom = obj->y() + 20;
+
+                                        if (objLeft <= right && objRight >= left &&
+                                            objTop  <= bottom && objBottom >= top) {
+                                            drawObjects->changeSelection(obj);
                                         }
                                     }
                                 }
@@ -2729,7 +2783,7 @@ int main(int, char**)
                         
                         // Right click
                         if (isHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
-                            contextMenuObject = FindDrawObjectAt(mousePos, offset);
+                            contextMenuObject = FindDrawObjectAt(mousePos, offset, diagramScale);
                             ImGui::OpenPopup("DiagramContextMenu");
                         }
                         
@@ -2792,14 +2846,17 @@ int main(int, char**)
                         
                         // Diagram render
                         ImDrawList* drawList = ImGui::GetWindowDrawList();
+                        // Use window screen position (not canvasPos) for clip rect —
+                        // canvasPos shifts left when scrolled, causing partial background fill
+                        ImVec2 windowScreenPos = ImGui::GetWindowPos();
                         ImVec2 childSize = ImGui::GetWindowSize();
-                        ImVec2 clipMin = canvasPos;
-                        ImVec2 clipMax = ImVec2(canvasPos.x + childSize.x, canvasPos.y + childSize.y);
-                        
+                        ImVec2 clipMin = windowScreenPos;
+                        ImVec2 clipMax = ImVec2(windowScreenPos.x + childSize.x, windowScreenPos.y + childSize.y);
+
                         drawList->PushClipRect(clipMin, clipMax, true);
                         drawList->AddRectFilled(clipMin, clipMax, IM_COL32(248, 248, 248, 255));
                         
-                        RenderDiagram(drawList, offset);
+                        RenderDiagram(drawList, offset, diagramScale);
                         
                         // Render box selection
                         if (isBoxSelecting && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
@@ -2818,7 +2875,27 @@ int main(int, char**)
                         }
                         
                         drawList->PopClipRect();
-                        
+
+                        // Zoom indicator (bottom-right corner)
+                        {
+                            ImVec2 windowPos  = ImGui::GetWindowPos();
+                            ImVec2 windowSize = ImGui::GetWindowSize();
+                            char zoomBuf[32];
+                            snprintf(zoomBuf, sizeof(zoomBuf), "%.0f%%", diagramScale * 100.0f);
+                            ImVec2 zoomTextSize = ImGui::CalcTextSize(zoomBuf);
+                            ImVec2 zoomPos = ImVec2(
+                                windowPos.x + windowSize.x - zoomTextSize.x - 16,
+                                windowPos.y + windowSize.y - zoomTextSize.y - 10
+                            );
+                            ImDrawList* overlayList = ImGui::GetWindowDrawList();
+                            overlayList->AddRectFilled(
+                                ImVec2(zoomPos.x - 6, zoomPos.y - 4),
+                                ImVec2(zoomPos.x + zoomTextSize.x + 6, zoomPos.y + zoomTextSize.y + 4),
+                                IM_COL32(240, 240, 245, 200), 3.0f
+                            );
+                            overlayList->AddText(zoomPos, IM_COL32(60, 60, 60, 255), zoomBuf);
+                        }
+
                         // Selection info
                         int selectedCount = 0;
                         for (int i = 0; i < drawObjects->count(); ++i) {
