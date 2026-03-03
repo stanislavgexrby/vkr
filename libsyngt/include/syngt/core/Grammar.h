@@ -162,6 +162,18 @@ public:
      */
     void regularize();
 
+    /**
+     * @brief Раскрыть все ссылки на макросы в правиле нетерминала
+     * Устанавливает m_isOpen=true на RENonTerminal-узлах, ссылающихся на NT с isMacro()
+     */
+    void openMacroRefs(const std::string& ntName);
+
+    /**
+     * @brief Закрыть все ссылки на нетерминалы в правиле
+     * Устанавливает m_isOpen=false на всех RENonTerminal-узлах
+     */
+    void closeAllRefs(const std::string& ntName);
+
     TerminalList* terminals() { return m_terminals.get(); }
     const TerminalList* terminals() const { return m_terminals.get(); }
     

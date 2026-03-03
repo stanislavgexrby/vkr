@@ -21,6 +21,7 @@ using SelectionMask = std::vector<int>;
 struct UndoState {
     std::vector<std::string> ntNames;     // Имена нетерминалов
     std::vector<std::string> ntValues;    // Определения нетерминалов
+    std::vector<bool> ntMacroFlags;       // Флаги макросов (isMacro)
     int activeIndex = 0;                  // Индекс активного нетерминала
     SelectionMask selection;              // Маска выделенных объектов
     
@@ -69,11 +70,13 @@ public:
      * 
      * @param ntNames Имена нетерминалов
      * @param ntValues Определения нетерминалов
+     * @param ntMacroFlags Флаги макросов (isMacro для каждого NT)
      * @param activeIndex Индекс активного нетерминала
      * @param selection Маска выделения
      */
     void addState(const std::vector<std::string>& ntNames,
                   const std::vector<std::string>& ntValues,
+                  const std::vector<bool>& ntMacroFlags,
                   int activeIndex,
                   const SelectionMask& selection);
     
@@ -82,26 +85,30 @@ public:
      * 
      * @param outNames Возвращает имена нетерминалов предыдущего состояния
      * @param outValues Возвращает определения предыдущего состояния
+     * @param outMacroFlags Возвращает флаги макросов предыдущего состояния
      * @param outActiveIndex Возвращает индекс активного нетерминала
      * @param outSelection Возвращает маску выделения
      * @return true если откат успешен, false если достигнуто начало
      */
     bool stepBack(std::vector<std::string>& outNames,
                   std::vector<std::string>& outValues,
+                  std::vector<bool>& outMacroFlags,
                   int& outActiveIndex,
                   SelectionMask& outSelection);
-    
+
     /**
      * @brief Шаг вперед (Redo)
-     * 
+     *
      * @param outNames Возвращает имена нетерминалов следующего состояния
      * @param outValues Возвращает определения следующего состояния
+     * @param outMacroFlags Возвращает флаги макросов следующего состояния
      * @param outActiveIndex Возвращает индекс активного нетерминала
      * @param outSelection Возвращает маску выделения
      * @return true если повтор успешен, false если достигнут конец
      */
     bool stepForward(std::vector<std::string>& outNames,
                      std::vector<std::string>& outValues,
+                     std::vector<bool>& outMacroFlags,
                      int& outActiveIndex,
                      SelectionMask& outSelection);
     

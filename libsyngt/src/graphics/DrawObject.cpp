@@ -198,14 +198,6 @@ DrawObjectMacro::DrawObjectMacro(Grammar* grammar, int id)
 {
 }
 
-std::string DrawObjectMacro::getNameFromGrammar() const {
-    if (!m_grammar) return "";
-    auto macros = m_grammar->getMacros();
-    if (m_id >= 0 && m_id < static_cast<int>(macros.size())) {
-        return macros[m_id];
-    }
-    return "";
-}
 
 void IntegerList::remove(int id) {
     auto it = std::find(m_items.begin(), m_items.end(), id);

@@ -3,10 +3,12 @@
 #include <syngt/parser/Parser2.h>
 #include <syngt/core/NTListItem.h>
 #include <syngt/transform/Regularize.h>
+#include <syngt/regex/RENonTerminal.h>
 #include <fstream>
 #include <stdexcept>
 #include <sstream>
 #include <iostream>
+#include <algorithm>
 
 namespace syngt {
 
@@ -88,7 +90,29 @@ void Grammar::load(const std::string& filename) {
         if (line.empty() || line[0] == '{' || line[0] == '/') {
             continue;
         }
-        
+
+        // Detect "AUXILIARYNOTIONS: Name1 Name2." — mark those NTs as macros
+        if (!readingRule) {
+            std::string upperLine = line;
+            for (char& c : upperLine) c = std::toupper(static_cast<unsigned char>(c));
+            if (upperLine.find("AUXILIARYNOTIONS:") != std::string::npos) {
+                size_t colonInLine = line.find(':');
+                std::string names = line.substr(colonInLine + 1);
+                size_t dot = names.rfind('.');
+                if (dot != std::string::npos) names = names.substr(0, dot);
+                std::istringstream nameStream(names);
+                std::string macroName;
+                while (nameStream >> macroName) {
+                    if (!macroName.empty() && macroName.back() == ',') macroName.pop_back();
+                    if (!macroName.empty()) {
+                        NTListItem* item = getNTItem(macroName);
+                        if (item) item->setMacro(true);
+                    }
+                }
+                continue;
+            }
+        }
+
         size_t colonPos = line.find(':');
         
         if (colonPos != std::string::npos && !readingRule) {
@@ -235,6 +259,22 @@ void Grammar::save(const std::string& filename) {
         }
     }
     
+    // Write macro names (AUXILIARYNOTIONS section)
+    std::vector<std::string> macroNames;
+    for (size_t i = 0; i < nts.size(); ++i) {
+        NTListItem* item = m_nonTerminals->getItem(static_cast<int>(i));
+        if (item && item->isMacro()) {
+            macroNames.push_back(nts[i]);
+        }
+    }
+    if (!macroNames.empty()) {
+        file << "AUXILIARYNOTIONS:";
+        for (const auto& name : macroNames) {
+            file << " " << name;
+        }
+        file << ".\n";
+    }
+
     file << "EOGram!\n";
     file.close();
 }
@@ -262,6 +302,47 @@ bool Grammar::hasRule(const std::string& name) const {
 
 void Grammar::regularize() {
     Regularize::regularize(this);
+}
+
+// ---------------------------------------------------------------------------
+// Tree-walking helpers for macro open/close
+// ---------------------------------------------------------------------------
+
+static void walkOpenMacros(RETree* node, Grammar* grammar) {
+    if (!node) return;
+    auto* ntNode = dynamic_cast<RENonTerminal*>(node);
+    if (ntNode) {
+        NTListItem* item = grammar->getNTItem(grammar->nonTerminals()->getString(ntNode->id()));
+        if (item && item->isMacro()) {
+            ntNode->setOpen(true);
+        }
+    }
+    walkOpenMacros(node->left(), grammar);
+    walkOpenMacros(node->right(), grammar);
+}
+
+static void walkCloseAllRefs(RETree* node) {
+    if (!node) return;
+    auto* ntNode = dynamic_cast<RENonTerminal*>(node);
+    if (ntNode) {
+        ntNode->setOpen(false);
+    }
+    walkCloseAllRefs(node->left());
+    walkCloseAllRefs(node->right());
+}
+
+void Grammar::openMacroRefs(const std::string& ntName) {
+    NTListItem* item = getNTItem(ntName);
+    if (item && item->root()) {
+        walkOpenMacros(item->root(), this);
+    }
+}
+
+void Grammar::closeAllRefs(const std::string& ntName) {
+    NTListItem* item = getNTItem(ntName);
+    if (item && item->root()) {
+        walkCloseAllRefs(item->root());
+    }
 }
 
 }

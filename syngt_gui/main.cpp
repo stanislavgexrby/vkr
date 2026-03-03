@@ -53,6 +53,9 @@ void MinimizeGrammar();
 void AnalyzeRecursion();
 void ExtractRule();
 void Substitute();
+void ToggleMacro();
+void OpenAllMacros();
+void CloseAllDefinitions();
 void AddNonTerminalReferenceToGrammar(const std::string& name);
 void FindAndCreateMissingNonTerminals(const std::string& rule);
 void DrawArrowhead(ImDrawList* drawList, ImVec2 from, ImVec2 to, ImU32 color, float scale = 1.0f);
@@ -146,7 +149,7 @@ static bool useOrOperator = false;
 
 // Layout sizes
 static float leftWidth = 800.0f;
-static float rightPanelButtonsHeight = 320.0f;
+static float rightPanelButtonsHeight = 430.0f;
 
 // Editor state
 static bool isBoxSelecting = false;
@@ -481,7 +484,20 @@ void RenderDiagram(ImDrawList* drawList, const ImVec2& offset, float scale) {
             float h = 40.0f * scale;
             drawList->AddRect(ImVec2(x, y - h/2), ImVec2(x + w, y + h/2), currentColor, 0.0f, 0, thickness);
 
+            // Double border for macro NTs
             auto leaf = dynamic_cast<syngt::graphics::DrawObjectLeaf*>(obj);
+            if (leaf && grammar) {
+                syngt::NTListItem* ntItem = grammar->getNTItem(leaf->name());
+                if (ntItem && ntItem->isMacro()) {
+                    float gap = 3.0f * scale;
+                    drawList->AddRect(
+                        ImVec2(x + gap, y - h/2 + gap),
+                        ImVec2(x + w - gap, y + h/2 - gap),
+                        currentColor, 0.0f, 0, thickness
+                    );
+                }
+            }
+
             if (leaf) {
                 std::string name = leaf->name();
                 float fontSize = ImGui::GetFontSize() * scale;
@@ -632,7 +648,8 @@ void SaveCurrentState() {
     
     auto names = grammar->getNonTerminals();
     std::vector<std::string> values;
-    
+    std::vector<bool> macroFlags;
+
     for (const auto& name : names) {
         auto* item = grammar->getNTItem(name);
         if (item && item->hasRoot()) {
@@ -640,9 +657,10 @@ void SaveCurrentState() {
         } else {
             values.push_back("eps");
         }
+        macroFlags.push_back(item ? item->isMacro() : false);
     }
-    
-    undoRedo.addState(names, values, activeNTIndex, selectionMask);
+
+    undoRedo.addState(names, values, macroFlags, activeNTIndex, selectionMask);
 }
 
 void RebuildGrammarFromText() {
@@ -690,44 +708,60 @@ void SyncGrammarFromDiagram() {
     SaveCurrentState();
 }
 
+static std::string buildRestoredText(const std::vector<std::string>& names,
+                                     const std::vector<std::string>& values,
+                                     const std::vector<bool>& macroFlags) {
+    std::string text;
+    for (size_t i = 0; i < names.size() && i < values.size(); ++i) {
+        text += names[i] + " : " + values[i];
+        if (!values[i].empty() && values[i].back() != '.') {
+            text += ".";
+        }
+        text += "\n";
+    }
+    // Append AUXILIARYNOTIONS if any macros present
+    std::vector<std::string> macroNames;
+    for (size_t i = 0; i < names.size() && i < macroFlags.size(); ++i) {
+        if (macroFlags[i]) macroNames.push_back(names[i]);
+    }
+    if (!macroNames.empty()) {
+        text += "AUXILIARYNOTIONS:";
+        for (const auto& mn : macroNames) text += " " + mn;
+        text += ".\n";
+    }
+    text += "EOGram!\n";
+    return text;
+}
+
 void Undo() {
     if (!undoRedo.canUndo()) {
         ClearOutput();
         AppendOutput("Nothing to undo\n");
         return;
     }
-    
+
     if (grammar) {
         std::vector<std::string> names;
         std::vector<std::string> values;
+        std::vector<bool> macroFlags;
         int index = activeNTIndex;
         syngt::SelectionMask selection = selectionMask;
-        
-        undoRedo.stepBack(names, values, index, selection);
-        
-        std::string restoredText;
-        for (size_t i = 0; i < names.size() && i < values.size(); ++i) {
-            restoredText += names[i] + " : " + values[i];
-            
-            if (!values[i].empty() && values[i].back() != '.') {
-                restoredText += ".";
-            }
-            
-            restoredText += "\n";
-        }
-        restoredText += "EOGram!\n";
-        
+
+        undoRedo.stepBack(names, values, macroFlags, index, selection);
+
+        std::string restoredText = buildRestoredText(names, values, macroFlags);
+
         if (restoredText.size() < sizeof(grammarText)) {
             strcpy_s(grammarText, sizeof(grammarText), restoredText.c_str());
         }
-        
+
         activeNTIndex = index;
         selectionMask = selection;
-        
+
         skipHistorySave = true;
         RebuildGrammarFromText();
         skipHistorySave = false;
-        
+
         ClearOutput();
         AppendOutput("Undo successful\n");
     }
@@ -739,38 +773,29 @@ void Redo() {
         AppendOutput("Nothing to redo\n");
         return;
     }
-    
+
     if (grammar) {
         std::vector<std::string> names;
         std::vector<std::string> values;
+        std::vector<bool> macroFlags;
         int index = activeNTIndex;
         syngt::SelectionMask selection = selectionMask;
-        
-        undoRedo.stepForward(names, values, index, selection);
-        
-        std::string restoredText;
-        for (size_t i = 0; i < names.size() && i < values.size(); ++i) {
-            restoredText += names[i] + " : " + values[i];
-            
-            if (!values[i].empty() && values[i].back() != '.') {
-                restoredText += ".";
-            }
-            
-            restoredText += "\n";
-        }
-        restoredText += "EOGram!\n";
-        
+
+        undoRedo.stepForward(names, values, macroFlags, index, selection);
+
+        std::string restoredText = buildRestoredText(names, values, macroFlags);
+
         if (restoredText.size() < sizeof(grammarText)) {
             strcpy_s(grammarText, sizeof(grammarText), restoredText.c_str());
         }
-        
+
         activeNTIndex = index;
         selectionMask = selection;
-        
+
         skipHistorySave = true;
         RebuildGrammarFromText();
         skipHistorySave = false;
-        
+
         ClearOutput();
         AppendOutput("Redo successful\n");
     }
@@ -1694,12 +1719,17 @@ void ParseGrammar() {
         char stats[512];
         // Subtract 1 to exclude the implicit epsilon terminal at index 0
         int terminalCount = std::max(0, grammar->terminals()->getCount() - 1);
+        int macroCount = 0;
+        for (const auto& nt : grammar->getNonTerminals()) {
+            auto* ntItem = grammar->getNTItem(nt);
+            if (ntItem && ntItem->isMacro()) macroCount++;
+        }
         snprintf(stats, sizeof(stats),
                  "Terminals: %d\nNon-terminals: %zu\nSemantics: %d\nMacros: %d\n",
                  terminalCount,
                  grammar->getNonTerminals().size(),
                  grammar->semantics()->getCount(),
-                 grammar->macros()->getCount());
+                 macroCount);
         AppendOutput(stats);
         
         SaveCurrentState();
@@ -2065,6 +2095,49 @@ void Substitute() {
 
     ClearOutput();
     AppendOutput("Substitution applied!\n");
+}
+
+void ToggleMacro() {
+    if (!grammar) { ClearOutput(); AppendOutput("No grammar loaded!\n"); return; }
+    auto nts = grammar->getNonTerminals();
+    if (activeNTIndex < 0 || activeNTIndex >= static_cast<int>(nts.size())) return;
+    std::string ntName = nts[activeNTIndex];
+    syngt::NTListItem* item = grammar->getNTItem(ntName);
+    if (!item) return;
+
+    item->setMacro(!item->isMacro());
+
+    // Persist via save/reload so grammarText contains AUXILIARYNOTIONS section
+    std::string tempFile = "temp_result.grm";
+    grammar->save(tempFile);
+    std::string newGrammar = LoadTextFile(tempFile.c_str());
+    std::remove(tempFile.c_str());
+    if (newGrammar.size() < sizeof(grammarText))
+        strcpy_s(grammarText, sizeof(grammarText), newGrammar.c_str());
+
+    SaveCurrentState();
+    ClearOutput();
+    AppendOutput(item->isMacro() ? "Marked as macro.\n" : "Unmarked as macro.\n");
+}
+
+void OpenAllMacros() {
+    if (!grammar) { ClearOutput(); AppendOutput("No grammar loaded!\n"); return; }
+    auto nts = grammar->getNonTerminals();
+    if (activeNTIndex < 0 || activeNTIndex >= static_cast<int>(nts.size())) return;
+    grammar->openMacroRefs(nts[activeNTIndex]);
+    UpdateDiagram();
+    ClearOutput();
+    AppendOutput("Macro references expanded.\n");
+}
+
+void CloseAllDefinitions() {
+    if (!grammar) { ClearOutput(); AppendOutput("No grammar loaded!\n"); return; }
+    auto nts = grammar->getNonTerminals();
+    if (activeNTIndex < 0 || activeNTIndex >= static_cast<int>(nts.size())) return;
+    grammar->closeAllRefs(nts[activeNTIndex]);
+    UpdateDiagram();
+    ClearOutput();
+    AppendOutput("Definitions collapsed.\n");
 }
 
 void LeftFactorize() {
@@ -2486,6 +2559,10 @@ int main(int, char**)
                 if (ImGui::MenuItem("Left Factorization")) LeftFactorize();
                 if (ImGui::MenuItem("Remove Useless")) RemoveUselessSymbols();
                 ImGui::Separator();
+                if (ImGui::MenuItem("Toggle Macro")) ToggleMacro();
+                if (ImGui::MenuItem("Open All Macros")) OpenAllMacros();
+                if (ImGui::MenuItem("Close All Definitions")) CloseAllDefinitions();
+                ImGui::Separator();
                 if (ImGui::MenuItem("Check LL(1)")) CheckLL1();
                 ImGui::EndMenu();
             }
@@ -2588,7 +2665,8 @@ int main(int, char**)
                             
                             std::string label = nts[i];
                             syngt::NTListItem* item = grammar->getNTItem(nts[i]);
-                            
+
+                            if (item && item->isMacro()) label += " [M]";
                             if (!item || !item->hasRoot()) {
                                 label += " [eps]";
                             }
@@ -3041,6 +3119,17 @@ int main(int, char**)
         }
         if (ImGui::Button("Check LL(1)", ImVec2(-FLT_MIN, 0))) {
             CheckLL1();
+        }
+        ImGui::Separator();
+        ImGui::Text("Macros");
+        if (ImGui::Button("Toggle Macro", ImVec2(-FLT_MIN, 0))) {
+            ToggleMacro();
+        }
+        if (ImGui::Button("Open All Macros", ImVec2(-FLT_MIN, 0))) {
+            OpenAllMacros();
+        }
+        if (ImGui::Button("Close All Definitions", ImVec2(-FLT_MIN, 0))) {
+            CloseAllDefinitions();
         }
         ImGui::EndChild();
         

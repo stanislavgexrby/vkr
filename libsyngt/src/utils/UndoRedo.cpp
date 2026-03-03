@@ -18,13 +18,23 @@ bool UndoRedo::equalState(const UndoState* s1, const UndoState* s2) const {
         return false;
     }
     
+    if (s1->ntMacroFlags.size() != s2->ntMacroFlags.size()) {
+        return false;
+    }
+
     for (size_t i = 0; i < s1->ntNames.size(); ++i) {
         if (s1->ntNames[i] != s2->ntNames[i] ||
             s1->ntValues[i] != s2->ntValues[i]) {
             return false;
         }
     }
-    
+
+    for (size_t i = 0; i < s1->ntMacroFlags.size(); ++i) {
+        if (s1->ntMacroFlags[i] != s2->ntMacroFlags[i]) {
+            return false;
+        }
+    }
+
     return true;
 }
 
@@ -41,14 +51,16 @@ void UndoRedo::freeForward(UndoState* from) {
 
 void UndoRedo::addState(const std::vector<std::string>& ntNames,
                         const std::vector<std::string>& ntValues,
+                        const std::vector<bool>& ntMacroFlags,
                         int activeIndex,
                         const SelectionMask& selection) {
-    
+
     UndoState* next = m_current ? m_current->next : nullptr;
-    
+
     auto newState = new UndoState();
     newState->ntNames = ntNames;
     newState->ntValues = ntValues;
+    newState->ntMacroFlags = ntMacroFlags;
     newState->activeIndex = activeIndex;
     
     if (m_current && !selection.empty()) {
@@ -78,39 +90,43 @@ void UndoRedo::addState(const std::vector<std::string>& ntNames,
 
 bool UndoRedo::stepBack(std::vector<std::string>& outNames,
                         std::vector<std::string>& outValues,
+                        std::vector<bool>& outMacroFlags,
                         int& outActiveIndex,
                         SelectionMask& outSelection) {
-    
+
     if (!canUndo()) {
         return false;
     }
-    
+
     m_current = m_current->prev;
-    
+
     outNames = m_current->ntNames;
     outValues = m_current->ntValues;
+    outMacroFlags = m_current->ntMacroFlags;
     outActiveIndex = m_current->activeIndex;
     outSelection = m_current->selection;
-    
+
     return true;
 }
 
 bool UndoRedo::stepForward(std::vector<std::string>& outNames,
                            std::vector<std::string>& outValues,
+                           std::vector<bool>& outMacroFlags,
                            int& outActiveIndex,
                            SelectionMask& outSelection) {
-    
+
     if (!canRedo()) {
         return false;
     }
-    
+
     m_current = m_current->next;
-    
+
     outNames = m_current->ntNames;
     outValues = m_current->ntValues;
+    outMacroFlags = m_current->ntMacroFlags;
     outActiveIndex = m_current->activeIndex;
     outSelection = m_current->selection;
-    
+
     return true;
 }
 

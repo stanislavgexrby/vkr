@@ -51,6 +51,9 @@ public:
     void setName(const std::string& name) { m_name = name; }
     void setMark(int mark) { m_mark = mark; }
     void setGrammar(Grammar* grammar) { m_grammar = grammar; }
+
+    bool isMacro() const { return m_mark == cmOpenMacro; }
+    void setMacro(bool macro) { m_mark = macro ? cmOpenMacro : cmNotMarked; }
     
     bool hasRoot() const { return m_root != nullptr; }
     void updateValueFromRoot();

@@ -12,8 +12,7 @@ class NTListItem;
 class RENonTerminal : public REMacro {
 private:
     Grammar* m_grammar = nullptr;
-    bool m_isOpen = false;
-    
+
 protected:
     std::string getNameFromID() const override;
     void setNameFromID(const std::string& name) override;
@@ -26,9 +25,9 @@ public:
     
     explicit RENonTerminal(Grammar* grammar, int id, bool open = false)
         : m_grammar(grammar)
-        , m_isOpen(open)
     {
         m_id = id;
+        m_isOpen = open;
     }
     
     ~RENonTerminal() override = default;
@@ -49,8 +48,6 @@ public:
         return std::make_unique<RENonTerminal>(grammar, id, open);
     }
     
-    bool isOpen() const { return m_isOpen; }
-    void setOpen(bool open) { m_isOpen = open; }
     void setGrammar(Grammar* grammar) { m_grammar = grammar; }
     /**
      * @brief Получить индекс нетерминала

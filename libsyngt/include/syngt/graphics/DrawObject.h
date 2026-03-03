@@ -263,15 +263,13 @@ public:
 
 /**
  * @brief Макрос (в пунктирном прямоугольнике)
+ * Имя берётся из NonTerminalList (тот же m_id, что и у DrawObjectNonTerminal).
  */
 class DrawObjectMacro : public DrawObjectNonTerminal {
-protected:
-    std::string getNameFromGrammar() const override;
-    
 public:
     DrawObjectMacro() = default;
     explicit DrawObjectMacro(Grammar* grammar, int id);
-    
+
     int getType() const override { return ctDrawObjectMacro; }
 };
 
