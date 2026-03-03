@@ -9,6 +9,21 @@
 #include <algorithm>
 #include <stdexcept>
 
+namespace {
+// Returns true if tree is an empty-string terminal (epsilon).
+// Terminal 0 is always pre-populated as "" (epsilon) by Grammar::fillNew(),
+// but TerminalList::getString(0) returns "@" for display — so we compare IDs,
+// not display strings.
+bool isEpsilonTree(const syngt::RETree* tree, const syngt::Grammar* grammar) {
+    if (!tree || !grammar) return false;
+    auto* term = dynamic_cast<const syngt::RETerminal*>(tree);
+    if (!term) return false;
+    // findTerminal("") finds the epsilon terminal (always ID 0 after fillNew())
+    int epsilonId = grammar->findTerminal("");
+    return epsilonId >= 0 && term->getID() == epsilonId;
+}
+} // namespace
+
 namespace syngt {
 
 std::unique_ptr<DFAToRegex> DFAToRegex::fromMinimizationTable(
@@ -301,6 +316,9 @@ std::unique_ptr<RETree> DFAToRegex::createAnd(
     std::unique_ptr<RETree> left,
     std::unique_ptr<RETree> right
 ) {
+    // ε·X = X,  X·ε = X
+    if (isEpsilonTree(left.get(),  m_grammar)) return right;
+    if (isEpsilonTree(right.get(), m_grammar)) return left;
     return REAnd::make(std::move(left), std::move(right));
 }
 

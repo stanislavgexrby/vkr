@@ -37,7 +37,10 @@ set(LIBSYNGT_SOURCES
     
     # Analysis
     src/analysis/ParsingTable.cpp
-    src/analysis/Minimization.cpp 
+    src/analysis/Minimization.cpp
+    src/analysis/DFAToREGEX.cpp
+    src/analysis/Minimize.cpp
+    src/analysis/RecursionAnalyzer.cpp
     
     # Utils
     src/utils/Semantic.cpp

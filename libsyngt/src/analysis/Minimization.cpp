@@ -89,24 +89,118 @@ void MinimizationTable::setStateName(State state, const std::string& name) {
 }
 
 void MinimizationTable::minimize() {
-    // 1. Детерминизация (если нужно)
-    // determinize();
-    
-    // 2. Минимизация
-    // minimizeByEquivalence();
-    
-    // TODO: Полная реализация алгоритма Хопкрофта
-    // Пока оставляем автомат как есть
+    // Port of Pascal TMinimizationTable.minimize() algorithm:
+    // Repeatedly find pairs of states with identical transitions and merge them.
+    // Two states can be merged if, for every symbol, their target state sets
+    // are equal (treating the two candidates as interchangeable).
+    // The FinalState is never merged with other states.
+
+    // Collect all states that appear in the table
+    std::set<State> allStates;
+    allStates.insert(StartState);
+    allStates.insert(FinalState);
+    for (const auto& entry : m_table) {
+        allStates.insert(entry.first.first);
+        for (State s : entry.second->getStates()) {
+            allStates.insert(s);
+        }
+    }
+
+    // Helper: normalize state (treat s1 == s2 as the same)
+    auto normalize = [](State s, State s1, State s2) -> State {
+        return (s == s2) ? s1 : s;
+    };
+
+    // Helper: check if transition sets of s1 and s2 are equal (treating s1 ≡ s2)
+    auto setsEqual = [&](const StatesSet* ss1, const StatesSet* ss2,
+                         State s1, State s2) -> bool {
+        for (State t : ss1->getStates()) {
+            State nt = normalize(t, s1, s2);
+            bool found = false;
+            for (State t2 : ss2->getStates()) {
+                if (normalize(t2, s1, s2) == nt) { found = true; break; }
+            }
+            if (!found) return false;
+        }
+        for (State t : ss2->getStates()) {
+            State nt = normalize(t, s1, s2);
+            bool found = false;
+            for (State t1 : ss1->getStates()) {
+                if (normalize(t1, s1, s2) == nt) { found = true; break; }
+            }
+            if (!found) return false;
+        }
+        return true;
+    };
+
+    // Helper: can we merge s2 into s1?
+    auto canJoin = [&](State s1, State s2) -> bool {
+        if (s1 == FinalState || s2 == FinalState) return false;
+        for (const auto& sym : m_symbols) {
+            auto it1 = m_table.find({s1, sym});
+            auto it2 = m_table.find({s2, sym});
+            bool has1 = (it1 != m_table.end() && !it1->second->empty());
+            bool has2 = (it2 != m_table.end() && !it2->second->empty());
+            if (has1 != has2) return false;
+            if (!has1) continue;
+            if (!setsEqual(it1->second.get(), it2->second.get(), s1, s2)) return false;
+        }
+        return true;
+    };
+
+    // Helper: merge s2 into s1 — replace all s2 → s1 in the table, remove s2's rows
+    auto joinStates = [&](State s1, State s2) {
+        // Replace s2 with s1 in all target sets
+        for (auto& entry : m_table) {
+            if (entry.second->findState(s2)) {
+                auto newSS = std::make_unique<StatesSet>();
+                for (State t : entry.second->getStates()) {
+                    newSS->addState(t == s2 ? s1 : t);
+                }
+                entry.second = std::move(newSS);
+            }
+        }
+        // Move s2's outgoing transitions to s1 (if s1 doesn't already have them)
+        for (const auto& sym : m_symbols) {
+            auto k2 = std::make_pair(s2, sym);
+            auto it2 = m_table.find(k2);
+            if (it2 != m_table.end()) {
+                auto k1 = std::make_pair(s1, sym);
+                if (m_table.find(k1) == m_table.end()) {
+                    auto newSS = std::make_unique<StatesSet>();
+                    for (State t : it2->second->getStates()) {
+                        newSS->addState(t == s2 ? s1 : t);
+                    }
+                    m_table[k1] = std::move(newSS);
+                }
+                m_table.erase(k2);
+            }
+        }
+    };
+
+    // Main loop: restart whenever a merge is performed (Pascal goto startLoop)
+    bool changed = true;
+    while (changed) {
+        changed = false;
+        std::vector<State> stateVec(allStates.begin(), allStates.end());
+        for (size_t i = 0; i < stateVec.size() && !changed; ++i) {
+            for (size_t j = i + 1; j < stateVec.size() && !changed; ++j) {
+                if (canJoin(stateVec[i], stateVec[j])) {
+                    joinStates(stateVec[i], stateVec[j]);
+                    allStates.erase(stateVec[j]);
+                    changed = true;
+                }
+            }
+        }
+    }
 }
 
 void MinimizationTable::determinize() {
-    // TODO: Алгоритм детерминизации NFA → DFA
-    // Используется подмножественная конструкция
+    // Not needed: DFAToRegex handles NFA directly via state elimination
 }
 
 void MinimizationTable::minimizeByEquivalence() {
-    // TODO: Алгоритм минимизации через классы эквивалентности
-    // Разбиваем состояния на классы неразличимых состояний
+    // Implemented above in minimize()
 }
 
 void MinimizationTable::writeToFile(const std::string& filename) const {

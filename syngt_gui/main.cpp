@@ -26,6 +26,8 @@
 #include <syngt/transform/RemoveUseless.h>
 #include <syngt/transform/FirstFollow.h>
 #include <syngt/analysis/ParsingTable.h>
+#include <syngt/analysis/Minimize.h>
+#include <syngt/analysis/RecursionAnalyzer.h>
 #include <syngt/utils/UndoRedo.h>
 #include <syngt/utils/Creator.h>
 #include <syngt/graphics/DrawObject.h>
@@ -34,6 +36,7 @@
 #include <sstream>
 #include <memory>
 #include <cmath>
+#include <vector>
 
 #ifdef _WIN32
     static ID3D11Device*            g_pd3dDevice = nullptr;
@@ -46,6 +49,8 @@
 
 void EliminateRightRecursion();
 void EliminateBothRecursions();
+void MinimizeGrammar();
+void AnalyzeRecursion();
 void AddNonTerminalReferenceToGrammar(const std::string& name);
 void FindAndCreateMissingNonTerminals(const std::string& rule);
 void DrawArrowhead(ImDrawList* drawList, ImVec2 from, ImVec2 to, ImU32 color);
@@ -110,6 +115,8 @@ static int activeNTIndex = 0;
 static syngt::SelectionMask selectionMask;
 static bool showAbout = false;
 static bool showHelp = false;
+static bool showRecursionWindow = false;
+static std::vector<syngt::RecursionResult> recursionResults;
 
 // Editor state
 static int activeLeftTab = 1; // 0 = Grammar Editor, 1 = Syntax Diagram
@@ -1844,6 +1851,55 @@ void EliminateBothRecursions() {
     }
 }
 
+void MinimizeGrammar() {
+    if (!grammar) {
+        ClearOutput();
+        AppendOutput("Please parse grammar first!\n");
+        return;
+    }
+
+    try {
+        ClearOutput();
+        syngt::Minimize::minimize(grammar.get());
+
+        std::string tempFile = "temp_result.grm";
+        grammar->save(tempFile);
+        std::string newGrammar = LoadTextFile(tempFile.c_str());
+        std::remove(tempFile.c_str());
+
+        if (newGrammar.size() < sizeof(grammarText)) {
+            strcpy_s(grammarText, sizeof(grammarText), newGrammar.c_str());
+        }
+
+        AppendOutput("Grammar minimized (DFA state minimization)!\n");
+
+        SaveCurrentState();
+        UpdateDiagram();
+    } catch (const std::exception& e) {
+        ClearOutput();
+        AppendOutput("Error:\n");
+        AppendOutput(e.what());
+        AppendOutput("\n");
+    }
+}
+
+void AnalyzeRecursion() {
+    if (!grammar) {
+        ClearOutput();
+        AppendOutput("Please parse grammar first!\n");
+        return;
+    }
+    try {
+        recursionResults = syngt::RecursionAnalyzer::analyze(grammar.get());
+        showRecursionWindow = true;
+    } catch (const std::exception& e) {
+        ClearOutput();
+        AppendOutput("Error:\n");
+        AppendOutput(e.what());
+        AppendOutput("\n");
+    }
+}
+
 void LeftFactorize() {
     if (!grammar) {
         ClearOutput();
@@ -2255,6 +2311,8 @@ int main(int, char**)
                 if (ImGui::MenuItem("Eliminate Left Recursion")) EliminateLeftRecursion();
                 if (ImGui::MenuItem("Eliminate Right Recursion")) EliminateRightRecursion();
                 if (ImGui::MenuItem("Regularize (Both)")) EliminateBothRecursions();
+                if (ImGui::MenuItem("Minimize (DFA)")) MinimizeGrammar();
+                if (ImGui::MenuItem("Analyze Recursion")) AnalyzeRecursion();
                 if (ImGui::MenuItem("Left Factorization")) LeftFactorize();
                 if (ImGui::MenuItem("Remove Useless")) RemoveUselessSymbols();
                 ImGui::Separator();
@@ -2729,6 +2787,12 @@ int main(int, char**)
         if (ImGui::Button("Regularize (Both)", ImVec2(-FLT_MIN, 0))) {
             EliminateBothRecursions();
         }
+        if (ImGui::Button("Minimize (DFA)", ImVec2(-FLT_MIN, 0))) {
+            MinimizeGrammar();
+        }
+        if (ImGui::Button("Analyze Recursion", ImVec2(-FLT_MIN, 0))) {
+            AnalyzeRecursion();
+        }
         if (ImGui::Button("Left Factorization", ImVec2(-FLT_MIN, 0))) {
             LeftFactorize();
         }
@@ -2882,6 +2946,33 @@ int main(int, char**)
             }
             
             ImGui::EndPopup();
+        }
+
+        // Recursion Analysis window
+        if (showRecursionWindow) {
+            ImGui::OpenPopup("Recursion Analysis");
+            if (ImGui::BeginPopupModal("Recursion Analysis", &showRecursionWindow,
+                                       ImGuiWindowFlags_AlwaysAutoResize)) {
+                if (ImGui::BeginTable("RecTable", 4,
+                                      ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
+                    ImGui::TableSetupColumn("Nonterminal");
+                    ImGui::TableSetupColumn("Left Recursion");
+                    ImGui::TableSetupColumn("Recursion");
+                    ImGui::TableSetupColumn("Right Recursion");
+                    ImGui::TableHeadersRow();
+                    for (const auto& r : recursionResults) {
+                        ImGui::TableNextRow();
+                        ImGui::TableSetColumnIndex(0); ImGui::TextUnformatted(r.name.c_str());
+                        ImGui::TableSetColumnIndex(1); ImGui::TextUnformatted(r.leftRecursion.c_str());
+                        ImGui::TableSetColumnIndex(2); ImGui::TextUnformatted(r.anyRecursion.c_str());
+                        ImGui::TableSetColumnIndex(3); ImGui::TextUnformatted(r.rightRecursion.c_str());
+                    }
+                    ImGui::EndTable();
+                }
+                ImGui::Separator();
+                if (ImGui::Button("Close")) showRecursionWindow = false;
+                ImGui::EndPopup();
+            }
         }
 
         // About dialog
