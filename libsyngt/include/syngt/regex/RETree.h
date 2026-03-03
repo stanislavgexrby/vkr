@@ -21,7 +21,7 @@ namespace graphics {
  */
 class RETree {
 protected:
-    int m_drawObj = -1;
+    mutable int m_drawObj = -1;
     
 public:
     RETree() = default;

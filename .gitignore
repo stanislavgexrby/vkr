@@ -6,6 +6,7 @@ build-msys2/
 build-wsl/
 
 # IDE
+.claude/
 .vscode/
 .idea/
 *.user

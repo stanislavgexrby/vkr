@@ -81,7 +81,8 @@ DrawObject* RETerminal::drawObjectsToRight(
     
     DrawObject* result = terminal.get();
     list->add(std::move(terminal));
-    
+    m_drawObj = list->count() - 1;
+
     return result;
 }
 
@@ -363,7 +364,8 @@ DrawObject* RENonTerminal::drawObjectsToRight(
     
     DrawObject* result = nonTerminal.get();
     list->add(std::move(nonTerminal));
-    
+    m_drawObj = list->count() - 1;
+
     return result;
 }
 

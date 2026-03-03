@@ -51,6 +51,7 @@ void EliminateRightRecursion();
 void EliminateBothRecursions();
 void MinimizeGrammar();
 void AnalyzeRecursion();
+void ExtractRule();
 void AddNonTerminalReferenceToGrammar(const std::string& name);
 void FindAndCreateMissingNonTerminals(const std::string& rule);
 void DrawArrowhead(ImDrawList* drawList, ImVec2 from, ImVec2 to, ImU32 color);
@@ -117,6 +118,12 @@ static bool showAbout = false;
 static bool showHelp = false;
 static bool showRecursionWindow = false;
 static std::vector<syngt::RecursionResult> recursionResults;
+static bool showExtractRuleDialog = false;
+static char extractNewNTName[256] = "";
+static std::string s_extractCoverStr;
+static std::string s_extractOldStr;
+static size_t s_extractPos = 0;
+static std::string s_extractActiveNT;
 
 // Editor state
 static int activeLeftTab = 1; // 0 = Grammar Editor, 1 = Syntax Diagram
@@ -1900,6 +1907,104 @@ void AnalyzeRecursion() {
     }
 }
 
+// ---------------------------------------------------------------------------
+// ExtractRule helpers
+// ---------------------------------------------------------------------------
+
+static syngt::SelectionMask GetSelMas() {
+    syngt::SelectionMask sm;
+    if (!drawObjects) return sm;
+    for (int i = 0; i < drawObjects->count(); ++i) {
+        if ((*drawObjects)[i]->selected()) {
+            sm.push_back(i);
+        }
+    }
+    return sm;
+}
+
+static const syngt::RETree* FindSelectionCover(const syngt::RETree* node,
+                                                const syngt::SelectionMask& sm) {
+    if (!node) return nullptr;
+    int doId = node->drawObj();
+    for (int id : sm) {
+        if (id == doId) return node;
+    }
+    const syngt::RETree* lc = FindSelectionCover(node->left(), sm);
+    const syngt::RETree* rc = FindSelectionCover(node->right(), sm);
+    if (!lc && !rc) return nullptr;
+    if (!lc) return rc;
+    if (!rc) return lc;
+    return node;
+}
+
+static std::string GetFreeNonTerminalName() {
+    int index = 1;
+    while (true) {
+        std::string name = "NT" + std::to_string(index);
+        if (grammar->findNonTerminal(name) < 0) return name;
+        ++index;
+    }
+}
+
+void ExtractRule() {
+    if (!grammar || !drawObjects) {
+        ClearOutput();
+        AppendOutput("No grammar loaded!\n");
+        return;
+    }
+
+    auto nts = grammar->getNonTerminals();
+    if (activeNTIndex < 0 || activeNTIndex >= static_cast<int>(nts.size())) return;
+
+    std::string activeNT = nts[activeNTIndex];
+    syngt::NTListItem* nt = grammar->getNTItem(activeNT);
+    if (!nt || !nt->root()) {
+        ClearOutput();
+        AppendOutput("No rule for current nonterminal!\n");
+        return;
+    }
+
+    auto sm = GetSelMas();
+    if (sm.empty()) {
+        ClearOutput();
+        AppendOutput("No objects selected!\n");
+        return;
+    }
+
+    const syngt::RETree* cover = FindSelectionCover(nt->root(), sm);
+    if (!cover) {
+        ClearOutput();
+        AppendOutput("Selection does not match any subtree!\n");
+        return;
+    }
+    if (cover == nt->root()) {
+        ClearOutput();
+        AppendOutput("Minimal regular expression matches whole rule!\n");
+        return;
+    }
+
+    auto emptyMask = syngt::EmptyMask();
+    std::string oldRuleStr = nt->root()->toString(emptyMask, false);
+    std::string newRuleStr = cover->toString(emptyMask, false);
+
+    size_t pos = oldRuleStr.find(newRuleStr);
+    if (pos == std::string::npos) {
+        ClearOutput();
+        AppendOutput("Error: selected subtree string not found in rule!\n");
+        return;
+    }
+
+    s_extractCoverStr = newRuleStr;
+    s_extractOldStr   = oldRuleStr;
+    s_extractPos      = pos;
+    s_extractActiveNT = activeNT;
+
+    std::string freeName = GetFreeNonTerminalName();
+    strcpy_s(extractNewNTName, sizeof(extractNewNTName), freeName.c_str());
+
+    showExtractRuleDialog = true;
+}
+
 void LeftFactorize() {
     if (!grammar) {
         ClearOutput();
@@ -2313,6 +2418,8 @@ int main(int, char**)
                 if (ImGui::MenuItem("Regularize (Both)")) EliminateBothRecursions();
                 if (ImGui::MenuItem("Minimize (DFA)")) MinimizeGrammar();
                 if (ImGui::MenuItem("Analyze Recursion")) AnalyzeRecursion();
+                ImGui::Separator();
+                if (ImGui::MenuItem("Extract Rule")) ExtractRule();
                 if (ImGui::MenuItem("Left Factorization")) LeftFactorize();
                 if (ImGui::MenuItem("Remove Useless")) RemoveUselessSymbols();
                 ImGui::Separator();
@@ -2353,8 +2460,9 @@ int main(int, char**)
         
         // Ctrl+A
         if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_A) && drawObjects) {
+            drawObjects->unselectAll();
             for (int i = 0; i < drawObjects->count(); ++i) {
-                (*drawObjects)[i]->setSelected(true);
+                drawObjects->changeSelection((*drawObjects)[i]);
             }
         }
         
@@ -2372,7 +2480,7 @@ int main(int, char**)
         ImGui::BeginChild("LeftPanel", ImVec2(leftWidth, 0), true);
         
         float leftPanelHeight = ImGui::GetContentRegionAvail().y;
-        float ruleEditorHeight = 100.0f;
+        static float ruleEditorHeight = 100.0f;
         float upperPartHeight = (activeLeftTab == 1) 
             ? (leftPanelHeight - ruleEditorHeight - 8)
             : leftPanelHeight;
@@ -2562,11 +2670,7 @@ int main(int, char**)
                                             int objY = obj->y();
                                             
                                             if (objX >= left && objX <= right && objY >= top && objY <= bottom) {
-                                                if (ImGui::GetIO().KeyCtrl) {
-                                                    drawObjects->changeSelection(obj);
-                                                } else {
-                                                    obj->setSelected(true);
-                                                }
+                                                drawObjects->changeSelection(obj);
                                             }
                                         }
                                     }
@@ -2594,6 +2698,9 @@ int main(int, char**)
                                 }
                                 if (ImGui::MenuItem("Delete Selected", "Del")) {
                                     DeleteSelectedObjects();
+                                }
+                                if (ImGui::MenuItem("Extract Rule")) {
+                                    ExtractRule();
                                 }
                                 ImGui::Separator();
                             }
@@ -2793,6 +2900,9 @@ int main(int, char**)
         if (ImGui::Button("Analyze Recursion", ImVec2(-FLT_MIN, 0))) {
             AnalyzeRecursion();
         }
+        if (ImGui::Button("Extract Rule", ImVec2(-FLT_MIN, 0))) {
+            ExtractRule();
+        }
         if (ImGui::Button("Left Factorization", ImVec2(-FLT_MIN, 0))) {
             LeftFactorize();
         }
@@ -2973,6 +3083,74 @@ int main(int, char**)
                 if (ImGui::Button("Close")) showRecursionWindow = false;
                 ImGui::EndPopup();
             }
+        }
+
+        // Extract Rule dialog
+        if (showExtractRuleDialog) {
+            ImGui::OpenPopup("Extract Rule");
+            showExtractRuleDialog = false;
+        }
+
+        if (ImGui::BeginPopupModal("Extract Rule", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::Text("Extracted expression:");
+            ImGui::TextWrapped("%s", s_extractCoverStr.c_str());
+            ImGui::Separator();
+            ImGui::Text("Enter new nonterminal name:");
+            ImGui::InputText("##extract_name", extractNewNTName, sizeof(extractNewNTName));
+
+            if (ImGui::Button("OK") && extractNewNTName[0] != '\0') {
+                std::string newName = extractNewNTName;
+                if (grammar->findNonTerminal(newName) >= 0) {
+                    // keep popup open, show error in output
+                    ClearOutput();
+                    AppendOutput("Nonterminal '");
+                    AppendOutput(newName.c_str());
+                    AppendOutput("' already exists!\n");
+                } else {
+                    std::string modifiedRule =
+                        s_extractOldStr.substr(0, s_extractPos) +
+                        newName +
+                        s_extractOldStr.substr(s_extractPos + s_extractCoverStr.length()) + ".";
+
+                    grammar->setNTRule(s_extractActiveNT, modifiedRule);
+                    grammar->addNonTerminal(newName);
+                    grammar->setNTRule(newName, s_extractCoverStr + ".");
+
+                    // Update grammarText
+                    std::string tempFile = "temp_result.grm";
+                    grammar->save(tempFile);
+                    std::string newGrammar = LoadTextFile(tempFile.c_str());
+                    std::remove(tempFile.c_str());
+                    if (newGrammar.size() < sizeof(grammarText)) {
+                        strcpy_s(grammarText, sizeof(grammarText), newGrammar.c_str());
+                    }
+
+                    // Switch to new NT
+                    auto newNts = grammar->getNonTerminals();
+                    for (int i = 0; i < static_cast<int>(newNts.size()); ++i) {
+                        if (newNts[i] == newName) {
+                            activeNTIndex = i;
+                            break;
+                        }
+                    }
+
+                    UpdateDiagram();
+                    LoadRuleToEditor();
+                    SaveCurrentState();
+
+                    ClearOutput();
+                    AppendOutput("Rule extracted to '");
+                    AppendOutput(newName.c_str());
+                    AppendOutput("'!\n");
+
+                    ImGui::CloseCurrentPopup();
+                }
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Cancel")) {
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
         }
 
         // About dialog
