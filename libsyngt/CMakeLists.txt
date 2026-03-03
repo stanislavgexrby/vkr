@@ -29,6 +29,7 @@ set(LIBSYNGT_SOURCES
     
     # Transform
     src/transform/LeftElimination.cpp
+    src/transform/RightElimination.cpp
     src/transform/LeftFactorization.cpp
     src/transform/RemoveUseless.cpp
     src/transform/FirstFollow.cpp

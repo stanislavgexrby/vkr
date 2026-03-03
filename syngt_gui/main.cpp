@@ -20,6 +20,7 @@
 #include <syngt/core/NTListItem.h>
 #include <syngt/parser/Parser.h>
 #include <syngt/transform/LeftElimination.h>
+#include <syngt/transform/RightElimination.h>
 #include <syngt/transform/LeftFactorization.h>
 #include <syngt/transform/RemoveUseless.h>
 #include <syngt/transform/FirstFollow.h>
@@ -42,6 +43,7 @@
     static GLFWwindow* g_Window = nullptr;
 #endif
 
+void EliminateRightRecursion();
 void AddNonTerminalReferenceToGrammar(const std::string& name);
 void FindAndCreateMissingNonTerminals(const std::string& rule);
 void DrawArrowhead(ImDrawList* drawList, ImVec2 from, ImVec2 to, ImU32 color);
@@ -1776,6 +1778,38 @@ void EliminateLeftRecursion() {
     }
 }
 
+void EliminateRightRecursion() {
+    if (!grammar) {
+        ClearOutput();
+        AppendOutput("Please parse grammar first!\n");
+        return;
+    }
+
+    try {
+        ClearOutput();
+        syngt::RightElimination::eliminate(grammar.get());
+
+        std::string tempFile = "temp_result.grm";
+        grammar->save(tempFile);
+        std::string newGrammar = LoadTextFile(tempFile.c_str());
+        std::remove(tempFile.c_str());
+
+        if (newGrammar.size() < sizeof(grammarText)) {
+            strcpy_s(grammarText, sizeof(grammarText), newGrammar.c_str());
+        }
+
+        AppendOutput("Right recursion eliminated!\n");
+
+        SaveCurrentState();
+        UpdateDiagram();
+    } catch (const std::exception& e) {
+        ClearOutput();
+        AppendOutput("Error:\n");
+        AppendOutput(e.what());
+        AppendOutput("\n");
+    }
+}
+
 void LeftFactorize() {
     if (!grammar) {
         ClearOutput();
@@ -2185,6 +2219,7 @@ int main(int, char**)
                 if (ImGui::MenuItem("Parse", "F5")) ParseGrammar();
                 ImGui::Separator();
                 if (ImGui::MenuItem("Eliminate Left Recursion")) EliminateLeftRecursion();
+                if (ImGui::MenuItem("Eliminate Right Recursion")) EliminateRightRecursion();
                 if (ImGui::MenuItem("Left Factorization")) LeftFactorize();
                 if (ImGui::MenuItem("Remove Useless")) RemoveUselessSymbols();
                 ImGui::Separator();
@@ -2609,8 +2644,8 @@ int main(int, char**)
             ImGui::BeginChild("RuleEditor", ImVec2(0, 0), true);
             ImGui::Text("Rule definition:");
             ImGui::PushItemWidth(-FLT_MIN);
-            if (ImGui::InputText("##rule_edit", ruleText, sizeof(ruleText), 
-                                ImGuiInputTextFlags_EnterReturnsTrue)) {
+            ImGui::InputText("##rule_edit", ruleText, sizeof(ruleText), ImGuiInputTextFlags_EnterReturnsTrue);
+            if (ImGui::IsItemDeactivatedAfterEdit()) {
                 BuildRule();
             }
             ImGui::PopItemWidth();
@@ -2652,6 +2687,9 @@ int main(int, char**)
         
         if (ImGui::Button("Eliminate Left Recursion", ImVec2(-FLT_MIN, 0))) {
             EliminateLeftRecursion();
+        }
+        if (ImGui::Button("Eliminate Right Recursion", ImVec2(-FLT_MIN, 0))) {
+            EliminateRightRecursion();
         }
         if (ImGui::Button("Left Factorization", ImVec2(-FLT_MIN, 0))) {
             LeftFactorize();
