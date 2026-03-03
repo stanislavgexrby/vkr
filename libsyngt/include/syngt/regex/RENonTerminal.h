@@ -59,6 +59,8 @@ public:
     
     Grammar* grammar() const { return m_grammar; }
 
+    std::string toString(const SelectionMask& mask, bool reverse) const override;
+
     syngt::graphics::DrawObject* drawObjectsToRight(
         syngt::graphics::DrawObjectList* list,
         syngt::SemanticIDList*& semantics,

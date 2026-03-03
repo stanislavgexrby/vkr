@@ -52,6 +52,7 @@ void EliminateBothRecursions();
 void MinimizeGrammar();
 void AnalyzeRecursion();
 void ExtractRule();
+void Substitute();
 void AddNonTerminalReferenceToGrammar(const std::string& name);
 void FindAndCreateMissingNonTerminals(const std::string& rule);
 void DrawArrowhead(ImDrawList* drawList, ImVec2 from, ImVec2 to, ImU32 color);
@@ -2005,6 +2006,51 @@ void ExtractRule() {
     showExtractRuleDialog = true;
 }
 
+void Substitute() {
+    if (!grammar || !drawObjects) {
+        ClearOutput();
+        AppendOutput("No grammar loaded!\n");
+        return;
+    }
+
+    auto nts = grammar->getNonTerminals();
+    if (activeNTIndex < 0 || activeNTIndex >= static_cast<int>(nts.size())) return;
+
+    std::string activeNT = nts[activeNTIndex];
+    syngt::NTListItem* nt = grammar->getNTItem(activeNT);
+    if (!nt || !nt->root()) {
+        ClearOutput();
+        AppendOutput("No rule for current nonterminal!\n");
+        return;
+    }
+
+    auto sm = GetSelMas();
+    if (sm.empty()) {
+        ClearOutput();
+        AppendOutput("No objects selected!\n");
+        return;
+    }
+
+    std::string newRuleStr = nt->root()->toString(sm, false) + ".";
+    grammar->setNTRule(activeNT, newRuleStr);
+
+    // Update grammarText
+    std::string tempFile = "temp_result.grm";
+    grammar->save(tempFile);
+    std::string newGrammar = LoadTextFile(tempFile.c_str());
+    std::remove(tempFile.c_str());
+    if (newGrammar.size() < sizeof(grammarText)) {
+        strcpy_s(grammarText, sizeof(grammarText), newGrammar.c_str());
+    }
+
+    UpdateDiagram();
+    LoadRuleToEditor();
+    SaveCurrentState();
+
+    ClearOutput();
+    AppendOutput("Substitution applied!\n");
+}
+
 void LeftFactorize() {
     if (!grammar) {
         ClearOutput();
@@ -2420,6 +2466,7 @@ int main(int, char**)
                 if (ImGui::MenuItem("Analyze Recursion")) AnalyzeRecursion();
                 ImGui::Separator();
                 if (ImGui::MenuItem("Extract Rule")) ExtractRule();
+                if (ImGui::MenuItem("Substitute")) Substitute();
                 if (ImGui::MenuItem("Left Factorization")) LeftFactorize();
                 if (ImGui::MenuItem("Remove Useless")) RemoveUselessSymbols();
                 ImGui::Separator();
@@ -2702,6 +2749,9 @@ int main(int, char**)
                                 if (ImGui::MenuItem("Extract Rule")) {
                                     ExtractRule();
                                 }
+                                if (ImGui::MenuItem("Substitute")) {
+                                    Substitute();
+                                }
                                 ImGui::Separator();
                             }
                             
@@ -2902,6 +2952,9 @@ int main(int, char**)
         }
         if (ImGui::Button("Extract Rule", ImVec2(-FLT_MIN, 0))) {
             ExtractRule();
+        }
+        if (ImGui::Button("Substitute", ImVec2(-FLT_MIN, 0))) {
+            Substitute();
         }
         if (ImGui::Button("Left Factorization", ImVec2(-FLT_MIN, 0))) {
             LeftFactorize();

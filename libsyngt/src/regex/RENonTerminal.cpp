@@ -48,6 +48,22 @@ std::unique_ptr<RETree> RENonTerminal::copy() const {
     return std::make_unique<RENonTerminal>(m_grammar, m_id, m_isOpen);
 }
 
+std::string RENonTerminal::toString(const SelectionMask& mask, bool reverse) const {
+    if (m_drawObj >= 0 && !mask.empty()) {
+        for (int id : mask) {
+            if (id == m_drawObj) {
+                RETree* root = getRoot();
+                if (root) {
+                    SelectionMask emptyMask;
+                    return "(" + root->toString(emptyMask, reverse) + ")";
+                }
+                break;
+            }
+        }
+    }
+    return getNameFromID();
+}
+
 bool RENonTerminal::allMacroWasOpened() const {
     if (m_isOpen) {
         RETree* root = getRoot();
