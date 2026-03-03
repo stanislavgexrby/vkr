@@ -2,9 +2,7 @@
 #include <syngt/parser/Parser.h>
 #include <syngt/parser/Parser2.h>
 #include <syngt/core/NTListItem.h>
-#include <syngt/transform/LeftElimination.h>
-#include <syngt/transform/LeftFactorization.h>
-#include <syngt/transform/RemoveUseless.h>
+#include <syngt/transform/Regularize.h>
 #include <fstream>
 #include <stdexcept>
 #include <sstream>
@@ -263,11 +261,7 @@ bool Grammar::hasRule(const std::string& name) const {
 }
 
 void Grammar::regularize() {
-    LeftElimination::eliminate(this);
-    
-    LeftFactorization::factorizeAll(this);
-    
-    RemoveUseless::remove(this);
+    Regularize::regularize(this);
 }
 
 }

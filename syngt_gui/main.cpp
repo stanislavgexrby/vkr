@@ -21,6 +21,7 @@
 #include <syngt/parser/Parser.h>
 #include <syngt/transform/LeftElimination.h>
 #include <syngt/transform/RightElimination.h>
+#include <syngt/transform/Regularize.h>
 #include <syngt/transform/LeftFactorization.h>
 #include <syngt/transform/RemoveUseless.h>
 #include <syngt/transform/FirstFollow.h>
@@ -44,6 +45,7 @@
 #endif
 
 void EliminateRightRecursion();
+void EliminateBothRecursions();
 void AddNonTerminalReferenceToGrammar(const std::string& name);
 void FindAndCreateMissingNonTerminals(const std::string& rule);
 void DrawArrowhead(ImDrawList* drawList, ImVec2 from, ImVec2 to, ImU32 color);
@@ -1810,6 +1812,38 @@ void EliminateRightRecursion() {
     }
 }
 
+void EliminateBothRecursions() {
+    if (!grammar) {
+        ClearOutput();
+        AppendOutput("Please parse grammar first!\n");
+        return;
+    }
+
+    try {
+        ClearOutput();
+        syngt::Regularize::regularize(grammar.get());
+
+        std::string tempFile = "temp_result.grm";
+        grammar->save(tempFile);
+        std::string newGrammar = LoadTextFile(tempFile.c_str());
+        std::remove(tempFile.c_str());
+
+        if (newGrammar.size() < sizeof(grammarText)) {
+            strcpy_s(grammarText, sizeof(grammarText), newGrammar.c_str());
+        }
+
+        AppendOutput("Grammar regularized (left + right recursion eliminated)!\n");
+
+        SaveCurrentState();
+        UpdateDiagram();
+    } catch (const std::exception& e) {
+        ClearOutput();
+        AppendOutput("Error:\n");
+        AppendOutput(e.what());
+        AppendOutput("\n");
+    }
+}
+
 void LeftFactorize() {
     if (!grammar) {
         ClearOutput();
@@ -2220,6 +2254,7 @@ int main(int, char**)
                 ImGui::Separator();
                 if (ImGui::MenuItem("Eliminate Left Recursion")) EliminateLeftRecursion();
                 if (ImGui::MenuItem("Eliminate Right Recursion")) EliminateRightRecursion();
+                if (ImGui::MenuItem("Regularize (Both)")) EliminateBothRecursions();
                 if (ImGui::MenuItem("Left Factorization")) LeftFactorize();
                 if (ImGui::MenuItem("Remove Useless")) RemoveUselessSymbols();
                 ImGui::Separator();
@@ -2690,6 +2725,9 @@ int main(int, char**)
         }
         if (ImGui::Button("Eliminate Right Recursion", ImVec2(-FLT_MIN, 0))) {
             EliminateRightRecursion();
+        }
+        if (ImGui::Button("Regularize (Both)", ImVec2(-FLT_MIN, 0))) {
+            EliminateBothRecursions();
         }
         if (ImGui::Button("Left Factorization", ImVec2(-FLT_MIN, 0))) {
             LeftFactorize();
