@@ -698,15 +698,6 @@ syngt::graphics::DrawObject* FindDrawObjectAt(const ImVec2& pos, const ImVec2& o
         syngt::graphics::DrawObject* obj = (*drawObjects)[i];
         if (!obj) continue;
 
-        // Skip structural objects — they can't be deleted and shouldn't be selectable
-        int t = obj->getType();
-        if (t == syngt::graphics::ctDrawObjectFirst ||
-            t == syngt::graphics::ctDrawObjectLast  ||
-            t == syngt::graphics::ctDrawObjectPoint ||
-            t == syngt::graphics::ctDrawObjectExtendedPoint) {
-            continue;
-        }
-
         if (obj->internalPoint(logicX, logicY)) {
             return obj;
         }
