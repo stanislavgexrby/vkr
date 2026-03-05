@@ -5,6 +5,7 @@
 #include <memory>
 #include <vector>
 #include <string>
+#include <iosfwd>
 
 namespace syngt {
 
@@ -360,13 +361,24 @@ public:
     
     int height() const { return m_height; }
     void setHeight(int h) { m_height = h; }
-    
+
     int width() const { return m_width; }
     void setWidth(int w) { m_width = w; }
-    
+
     Grammar* grammar() const { return m_grammar; }
-    
+
     const IntegerList& selectedList() const { return m_selectedList; }
+
+    /**
+     * @brief Сохранить расположение диаграммы в поток
+     */
+    void saveLayout(std::ostream& out) const;
+
+    /**
+     * @brief Загрузить расположение диаграммы из потока
+     * @return true если успешно, false при ошибке
+     */
+    bool loadLayout(std::istream& in, Grammar* grammar);
 };
 
 } // namespace graphics

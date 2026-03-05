@@ -37,6 +37,9 @@
 #include <memory>
 #include <cmath>
 #include <vector>
+#include <string>
+#include <unordered_map>
+#include <limits>
 
 #ifdef _WIN32
     static ID3D11Device*            g_pd3dDevice = nullptr;
@@ -56,11 +59,16 @@ void Substitute();
 void ToggleMacro();
 void OpenAllMacros();
 void CloseAllDefinitions();
+void NewFile();
+void ImportFromGEdit();
+void DiagramAddExtendedPoint();
 void AddNonTerminalReferenceToGrammar(const std::string& name);
 void FindAndCreateMissingNonTerminals(const std::string& rule);
 void DrawArrowhead(ImDrawList* drawList, ImVec2 from, ImVec2 to, ImU32 color, float scale = 1.0f);
 void LoadRuleToEditor();
 void BuildRule();
+void SaveCurrentDiagramToCache();
+void ClearDiagramLayouts();
 
 #ifdef _WIN32
     bool CreateDeviceD3D(HWND hWnd);
@@ -111,6 +119,7 @@ void BuildRule();
 
 static char ruleText[4096] = "";
 static char grammarText[1024 * 64] = "";
+static int  grammarWidgetVersion = 0;  // increment to force InputTextMultiline reload
 static char outputText[1024 * 64] = "";
 static char currentFile[MAX_PATH] = "";
 static std::unique_ptr<syngt::Grammar> grammar;
@@ -139,6 +148,10 @@ static int s_stableMinX = 0, s_stableMinY = 0;
 static int s_stableMaxX = 100, s_stableMaxY = 100;
 static bool s_stableBoundsValid = false;
 static syngt::graphics::DrawObject* hoveredObject = nullptr;
+
+// Diagram layout cache: NT name → serialized layout text
+static std::unordered_map<std::string, std::string> ntDiagramLayouts;
+static std::string s_currentDiagramNT; // which NT's diagram is in drawObjects
 static syngt::graphics::DrawObject* contextMenuObject = nullptr;
 static bool showAddTerminalDialog = false;
 static bool showAddNonTerminalDialog = false;
@@ -202,8 +215,25 @@ void SaveTextFile(const char* filename, const std::string& content) {
         ofn.nMaxFile = MAX_PATH;
         ofn.Flags = OFN_EXPLORER | OFN_PATHMUSTEXIST | OFN_HIDEREADONLY | OFN_OVERWRITEPROMPT;
         ofn.lpstrDefExt = "grm";
-        
+
         if (GetSaveFileNameA(&ofn)) {
+            return std::string(filename);
+        }
+        return "";
+    }
+
+    std::string OpenGEditFileDialog() {
+        char filename[MAX_PATH] = "";
+        OPENFILENAMEA ofn = {};
+        ofn.lStructSize = sizeof(ofn);
+        ofn.hwndOwner = nullptr;
+        ofn.lpstrFilter = "GEdit Files (*.grw)\0*.grw\0All Files (*.*)\0*.*\0";
+        ofn.lpstrFile = filename;
+        ofn.nMaxFile = MAX_PATH;
+        ofn.Flags = OFN_EXPLORER | OFN_FILEMUSTEXIST | OFN_HIDEREADONLY;
+        ofn.lpstrDefExt = "grw";
+
+        if (GetOpenFileNameA(&ofn)) {
             return std::string(filename);
         }
         return "";
@@ -244,6 +274,28 @@ void SaveTextFile(const char* filename, const std::string& content) {
         if (f) pclose(f);
         
         printf("Enter filename to save (.grm): ");
+        if (fgets(filename, sizeof(filename), stdin)) {
+            size_t len = strlen(filename);
+            if (len > 0 && filename[len-1] == '\n')
+                filename[len-1] = '\0';
+            return std::string(filename);
+        }
+        return "";
+    }
+
+    std::string OpenGEditFileDialog() {
+        char filename[MAX_PATH] = "";
+        FILE* f = popen("zenity --file-selection --file-filter='GEdit files | *.grw' --file-filter='All files | *' 2>/dev/null", "r");
+        if (f && fgets(filename, sizeof(filename), f)) {
+            pclose(f);
+            size_t len = strlen(filename);
+            if (len > 0 && filename[len-1] == '\n')
+                filename[len-1] = '\0';
+            return std::string(filename);
+        }
+        if (f) pclose(f);
+
+        printf("Enter filename to open (.grw): ");
         if (fgets(filename, sizeof(filename), stdin)) {
             size_t len = strlen(filename);
             if (len > 0 && filename[len-1] == '\n')
@@ -538,73 +590,98 @@ void UpdateDiagram() {
         s_stableBoundsValid = false;
         return;
     }
-    
+
+    // Save current diagram layout before switching to a new NT
+    SaveCurrentDiagramToCache();
+
     auto nts = grammar->getNonTerminals();
     if (activeNTIndex < 0 || activeNTIndex >= static_cast<int>(nts.size())) {
         activeNTIndex = 0;
     }
-    
+
     if (nts.empty()) {
         drawObjects.reset();
+        s_currentDiagramNT.clear();
         return;
     }
-    
+
     std::string activeNT = nts[activeNTIndex];
-    
+
     if (activeNT == "EOGram" || activeNT == "EOGram!") {
         drawObjects.reset();
+        s_currentDiagramNT.clear();
         ClearOutput();
         AppendOutput("EOGram! is not a displayable rule\n");
         return;
     }
-    
+
     syngt::NTListItem* item = grammar->getNTItem(activeNT);
     if (!item) {
         drawObjects.reset();
+        s_currentDiagramNT.clear();
         ClearOutput();
         AppendOutput("Cannot find rule for '");
         AppendOutput(activeNT.c_str());
         AppendOutput("'\n");
         return;
     }
-    
+
+    // Try to restore saved layout for this NT first
+    auto layoutIt = ntDiagramLayouts.find(activeNT);
+    if (layoutIt != ntDiagramLayouts.end()) {
+        auto restoredDO = std::make_unique<syngt::graphics::DrawObjectList>(grammar.get());
+        std::istringstream iss(layoutIt->second);
+        if (restoredDO->loadLayout(iss, grammar.get())) {
+            drawObjects = std::move(restoredDO);
+            s_currentDiagramNT = activeNT;
+            s_stableBoundsValid = false;
+            LoadRuleToEditor();
+            return;
+        }
+        // If load failed, fall through to Creator
+    }
+
     if (!item->hasRoot()) {
         drawObjects = std::make_unique<syngt::graphics::DrawObjectList>(grammar.get());
-        
+
         auto firstDO = std::make_unique<syngt::graphics::DrawObjectFirst>();
         firstDO->place();
-        
+
         syngt::graphics::DrawObjectFirst* firstPtr = firstDO.get();
         drawObjects->add(std::move(firstDO));
-        
+
         auto lastDO = std::make_unique<syngt::graphics::DrawObjectLast>();
         auto arrow = std::make_unique<syngt::graphics::Arrow>(syngt::graphics::cwFORWARD, firstPtr);
         lastDO->setInArrow(std::move(arrow));
-        
+
         int lastX = firstPtr->endX() + 20;
         int lastY = firstPtr->y();
         lastDO->setPositionForCreator(lastX, lastY);
-        
+
         drawObjects->add(std::move(lastDO));
-        
+
         drawObjects->setWidth(lastX + syngt::graphics::NS_Radius + syngt::graphics::HorizontalSkipFromBorder);
         drawObjects->setHeight(firstPtr->y() + syngt::graphics::VerticalSkipFromBorder + syngt::graphics::NS_Radius);
-        
+
+        s_currentDiagramNT = activeNT;
         LoadRuleToEditor();
         return;
     }
-    
+
     try {
         drawObjects = std::make_unique<syngt::graphics::DrawObjectList>(grammar.get());
         syngt::Creator::createDrawObjects(drawObjects.get(), item->root());
     } catch (const std::exception& e) {
         drawObjects.reset();
+        s_currentDiagramNT.clear();
         ClearOutput();
         AppendOutput("Error creating diagram:\n");
         AppendOutput(e.what());
         AppendOutput("\n");
+        return;
     }
 
+    s_currentDiagramNT = activeNT;
     // Invalidate stable bounds so they're recomputed on next frame
     s_stableBoundsValid = false;
 
@@ -663,6 +740,19 @@ void SaveCurrentState() {
     undoRedo.addState(names, values, macroFlags, activeNTIndex, selectionMask);
 }
 
+void SaveCurrentDiagramToCache() {
+    if (drawObjects && !s_currentDiagramNT.empty()) {
+        std::ostringstream oss;
+        drawObjects->saveLayout(oss);
+        ntDiagramLayouts[s_currentDiagramNT] = oss.str();
+    }
+}
+
+void ClearDiagramLayouts() {
+    ntDiagramLayouts.clear();
+    s_currentDiagramNT.clear();
+}
+
 void RebuildGrammarFromText() {
     try {
         std::string tempFile = "temp_parse.grm";
@@ -684,9 +774,10 @@ void RebuildGrammarFromText() {
                 activeNTIndex = 0;
             }
         }
-        
+
+        ClearDiagramLayouts();
         UpdateDiagram();
-        
+
         if (!skipHistorySave) {
             SaveCurrentState();
         }
@@ -753,6 +844,7 @@ void Undo() {
 
         if (restoredText.size() < sizeof(grammarText)) {
             strcpy_s(grammarText, sizeof(grammarText), restoredText.c_str());
+            grammarWidgetVersion++;
         }
 
         activeNTIndex = index;
@@ -787,6 +879,7 @@ void Redo() {
 
         if (restoredText.size() < sizeof(grammarText)) {
             strcpy_s(grammarText, sizeof(grammarText), restoredText.c_str());
+            grammarWidgetVersion++;
         }
 
         activeNTIndex = index;
@@ -1702,7 +1795,10 @@ void FindAndCreateMissingNonTerminals(const std::string& rule) {
 }
 
 // Grammar Operations
-void ParseGrammar() {
+void ParseGrammar(bool clearLayouts = true) {
+    if (clearLayouts) {
+        ClearDiagramLayouts();
+    }
     try {
         ClearOutput();
         
@@ -1746,28 +1842,78 @@ void ParseGrammar() {
     }
 }
 
+// Parse DIAGRAM_LAYOUT: section from file content after EOGram!
+static void ParseDiagramLayoutSection(const std::string& layoutSection) {
+    ntDiagramLayouts.clear();
+    std::istringstream in(layoutSection);
+    std::string token;
+    if (!(in >> token) || token != "DIAGRAM_LAYOUT:") return;
+
+    int ntCount;
+    if (!(in >> ntCount)) return;
+    in.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+
+    for (int i = 0; i < ntCount; ++i) {
+        std::string ntName;
+        if (!std::getline(in, ntName)) break;
+        // trim whitespace
+        while (!ntName.empty() && (ntName.front() == ' ' || ntName.front() == '\r')) ntName.erase(ntName.begin());
+        while (!ntName.empty() && (ntName.back() == ' ' || ntName.back() == '\r')) ntName.pop_back();
+        if (ntName.empty()) { --i; continue; }
+
+        // Read the layout data until we hit END_NT or next NT marker
+        // We use a sentinel count approach: read height/width/count first, then objects+arrows
+        // Easiest: capture the rest as a sub-stream until END_NT
+        std::string layoutData;
+        std::string line;
+        while (std::getline(in, line)) {
+            if (line == "END_NT" || line == "END_NT\r") break;
+            layoutData += line + "\n";
+        }
+        ntDiagramLayouts[ntName] = layoutData;
+    }
+}
+
 void LoadFile() {
     std::string filename = OpenFileDialog();
     if (filename.empty()) return;
-    
+
     try {
         ClearOutput();
         std::string content = LoadTextFile(filename.c_str());
-        
-        if (content.size() >= sizeof(grammarText)) {
+
+        // Split at DIAGRAM_LAYOUT: section (if present)
+        std::string grammarPart = content;
+        std::string layoutPart;
+        const std::string layoutMarker = "\nDIAGRAM_LAYOUT:";
+        size_t layoutPos = content.find(layoutMarker);
+        if (layoutPos != std::string::npos) {
+            grammarPart = content.substr(0, layoutPos + 1); // keep the \n before marker
+            layoutPart = content.substr(layoutPos + 1);     // "DIAGRAM_LAYOUT:..."
+        }
+
+        if (grammarPart.size() >= sizeof(grammarText)) {
             AppendOutput("File too large!\n");
             return;
         }
-        
-        strcpy_s(grammarText, sizeof(grammarText), content.c_str());
+
+        strcpy_s(grammarText, sizeof(grammarText), grammarPart.c_str());
+        grammarWidgetVersion++;
         strcpy_s(currentFile, sizeof(currentFile), filename.c_str());
-        
+
+        // Load layout data into map before parsing (so UpdateDiagram can use it)
+        ntDiagramLayouts.clear();
+        s_currentDiagramNT.clear();
+        if (!layoutPart.empty()) {
+            ParseDiagramLayoutSection(layoutPart);
+        }
+
         AppendOutput("File loaded: ");
         AppendOutput(filename.c_str());
         AppendOutput("\n");
-        
-        ParseGrammar();
-        
+
+        ParseGrammar(false); // don't clear layouts we just loaded
+
     } catch (const std::exception& e) {
         ClearOutput();
         AppendOutput("Load Error:\n");
@@ -1778,7 +1924,7 @@ void LoadFile() {
 
 void SaveFile() {
     std::string filename;
-    
+
     if (currentFile[0] == '\0') {
         filename = SaveFileDialog();
         if (filename.empty()) return;
@@ -1786,9 +1932,30 @@ void SaveFile() {
     } else {
         filename = currentFile;
     }
-    
+
     try {
-        SaveTextFile(filename.c_str(), grammarText);
+        // Save current diagram to cache before writing
+        SaveCurrentDiagramToCache();
+
+        std::ofstream file(filename);
+        if (!file.is_open()) throw std::runtime_error("Cannot create file: " + filename);
+
+        file << grammarText;
+
+        // Append DIAGRAM_LAYOUT section if we have any layouts
+        if (!ntDiagramLayouts.empty()) {
+            file << "DIAGRAM_LAYOUT:\n";
+            file << static_cast<int>(ntDiagramLayouts.size()) << "\n";
+            for (const auto& pair : ntDiagramLayouts) {
+                file << pair.first << "\n";
+                file << pair.second;
+                file << "END_NT\n";
+            }
+            file << "END_DIAGRAM_LAYOUT\n";
+        }
+
+        file.close();
+
         ClearOutput();
         AppendOutput("File saved: ");
         AppendOutput(filename.c_str());
@@ -1830,8 +1997,9 @@ void EliminateLeftRecursion() {
         }
         
         AppendOutput("Left recursion eliminated!\n");
-        
+
         SaveCurrentState();
+        ClearDiagramLayouts();
         UpdateDiagram();
     } catch (const std::exception& e) {
         ClearOutput();
@@ -1864,6 +2032,7 @@ void EliminateRightRecursion() {
         AppendOutput("Right recursion eliminated!\n");
 
         SaveCurrentState();
+        ClearDiagramLayouts();
         UpdateDiagram();
     } catch (const std::exception& e) {
         ClearOutput();
@@ -1896,6 +2065,7 @@ void EliminateBothRecursions() {
         AppendOutput("Grammar regularized (left + right recursion eliminated)!\n");
 
         SaveCurrentState();
+        ClearDiagramLayouts();
         UpdateDiagram();
     } catch (const std::exception& e) {
         ClearOutput();
@@ -1928,6 +2098,7 @@ void MinimizeGrammar() {
         AppendOutput("Grammar minimized (DFA state minimization)!\n");
 
         SaveCurrentState();
+        ClearDiagramLayouts();
         UpdateDiagram();
     } catch (const std::exception& e) {
         ClearOutput();
@@ -2089,6 +2260,7 @@ void Substitute() {
         strcpy_s(grammarText, sizeof(grammarText), newGrammar.c_str());
     }
 
+    ClearDiagramLayouts();
     UpdateDiagram();
     LoadRuleToEditor();
     SaveCurrentState();
@@ -2125,6 +2297,7 @@ void OpenAllMacros() {
     auto nts = grammar->getNonTerminals();
     if (activeNTIndex < 0 || activeNTIndex >= static_cast<int>(nts.size())) return;
     grammar->openMacroRefs(nts[activeNTIndex]);
+    ClearDiagramLayouts();
     UpdateDiagram();
     ClearOutput();
     AppendOutput("Macro references expanded.\n");
@@ -2135,9 +2308,83 @@ void CloseAllDefinitions() {
     auto nts = grammar->getNonTerminals();
     if (activeNTIndex < 0 || activeNTIndex >= static_cast<int>(nts.size())) return;
     grammar->closeAllRefs(nts[activeNTIndex]);
+    ClearDiagramLayouts();
     UpdateDiagram();
     ClearOutput();
     AppendOutput("Definitions collapsed.\n");
+}
+
+void NewFile() {
+    grammar = std::make_unique<syngt::Grammar>();
+    grammar->fillNew();
+    grammarText[0] = '\0';
+    grammarWidgetVersion++;
+    currentFile[0] = '\0';
+    activeNTIndex = -1;
+    selectionMask.clear();
+    drawObjects.reset();
+    undoRedo.clearData();
+    ClearDiagramLayouts();
+    ClearOutput();
+    AppendOutput("New grammar created.\n");
+    SaveCurrentState();
+}
+
+void ImportFromGEdit() {
+    std::string filename = OpenGEditFileDialog();
+    if (filename.empty()) return;
+
+    try {
+        grammar = std::make_unique<syngt::Grammar>();
+        grammar->importFromGEdit(filename);
+
+        // Sync grammarText from the imported grammar
+        std::string tempFile = "temp_import.grm";
+        grammar->save(tempFile);
+        std::string imported = LoadTextFile(tempFile.c_str());
+        std::remove(tempFile.c_str());
+
+        if (imported.size() >= sizeof(grammarText)) {
+            AppendOutput("Imported grammar too large!\n");
+            return;
+        }
+        strcpy_s(grammarText, sizeof(grammarText), imported.c_str());
+        currentFile[0] = '\0';
+
+        ClearOutput();
+        AppendOutput("Imported from GEdit: ");
+        AppendOutput(filename.c_str());
+        AppendOutput("\n");
+
+        undoRedo.clearData();
+        ParseGrammar();
+
+    } catch (const std::exception& e) {
+        ClearOutput();
+        AppendOutput("Import Error:\n");
+        AppendOutput(e.what());
+        AppendOutput("\n");
+    }
+}
+
+void DiagramAddExtendedPoint() {
+    if (!drawObjects) {
+        ClearOutput();
+        AppendOutput("No diagram loaded!\n");
+        return;
+    }
+    // Requires exactly 1 selected object with an incoming arrow
+    int selectedCount = 0;
+    for (int i = 0; i < drawObjects->count(); ++i) {
+        if ((*drawObjects)[i]->selected()) selectedCount++;
+    }
+    if (selectedCount != 1) {
+        ClearOutput();
+        AppendOutput("Select exactly 1 diagram object to add an extended point before it.\n");
+        return;
+    }
+    drawObjects->addExtendedPoint();
+    // Note: do NOT call UpdateDiagram() — it would rebuild from grammar and lose the point
 }
 
 void LeftFactorize() {
@@ -2161,8 +2408,9 @@ void LeftFactorize() {
         }
         
         AppendOutput("Left factorization completed!\n");
-        
+
         SaveCurrentState();
+        ClearDiagramLayouts();
         UpdateDiagram();
     } catch (const std::exception& e) {
         ClearOutput();
@@ -2193,8 +2441,9 @@ void RemoveUselessSymbols() {
         }
         
         AppendOutput("Useless symbols removed!\n");
-        
+
         SaveCurrentState();
+        ClearDiagramLayouts();
         UpdateDiagram();
     } catch (const std::exception& e) {
         ClearOutput();
@@ -2533,9 +2782,12 @@ int main(int, char**)
         // Menu bar
         if (ImGui::BeginMainMenuBar()) {
             if (ImGui::BeginMenu("File")) {
+                if (ImGui::MenuItem("New", "Ctrl+N")) NewFile();
                 if (ImGui::MenuItem("Open...", "Ctrl+O")) LoadFile();
                 if (ImGui::MenuItem("Save", "Ctrl+S")) SaveFile();
                 if (ImGui::MenuItem("Save As...")) SaveFileAs();
+                ImGui::Separator();
+                if (ImGui::MenuItem("Import from GEdit...")) ImportFromGEdit();
                 ImGui::Separator();
                 if (ImGui::MenuItem("Exit", "Alt+F4")) done = true;
                 ImGui::EndMenu();
@@ -2598,6 +2850,11 @@ int main(int, char**)
             }
         }
         
+        // Ctrl+N
+        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_N)) {
+            NewFile();
+        }
+
         // Ctrl+A
         if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_A) && drawObjects) {
             drawObjects->unselectAll();
@@ -2639,9 +2896,11 @@ int main(int, char**)
                 
                 ImGui::Separator();
                 
-                ImGui::InputTextMultiline("##grammar", grammarText, sizeof(grammarText), 
+                ImGui::PushID(grammarWidgetVersion);
+                ImGui::InputTextMultiline("##grammar", grammarText, sizeof(grammarText),
                                            ImVec2(-FLT_MIN, -FLT_MIN),
                                            ImGuiInputTextFlags_AllowTabInput);
+                ImGui::PopID();
                 
                 ImGui::EndTabItem();
             }
@@ -2785,10 +3044,20 @@ int main(int, char**)
                                 isDragging = true;
                                 lastMousePos = mousePos;
 
-                                if (!ImGui::GetIO().KeyCtrl) {
-                                    drawObjects->unselectAll();
+                                if (ImGui::GetIO().KeyShift) {
+                                    // Shift+Click: select clicked object + all connected (upstream)
+                                    drawObjects->selectAllNotSelected(clicked);
+                                } else if (ImGui::GetIO().KeyCtrl) {
+                                    // Ctrl+Click: toggle selection
+                                    drawObjects->changeSelection(clicked);
+                                } else {
+                                    if (!clicked->selected()) {
+                                        // Click unselected: deselect all, select clicked
+                                        drawObjects->unselectAll();
+                                        drawObjects->changeSelection(clicked);
+                                    }
+                                    // Click already-selected: keep selection for group drag
                                 }
-                                drawObjects->changeSelection(clicked);
                             } else {
                                 isBoxSelecting = true;
                                 boxSelectStart = mousePos;
@@ -2918,10 +3187,22 @@ int main(int, char**)
                                 }
                                 ImGui::EndMenu();
                             }
-                            
+
+                            ImGui::Separator();
+                            {
+                                int selCnt = 0;
+                                if (drawObjects) {
+                                    for (int i = 0; i < drawObjects->count(); ++i)
+                                        if ((*drawObjects)[i]->selected()) selCnt++;
+                                }
+                                if (ImGui::MenuItem("Add Extended Point", nullptr, false, selCnt == 1)) {
+                                    DiagramAddExtendedPoint();
+                                }
+                            }
+
                             ImGui::EndPopup();
                         }
-                        
+
                         // Diagram render
                         ImDrawList* drawList = ImGui::GetWindowDrawList();
                         // Use window screen position (not canvasPos) for clip rect —
@@ -3353,6 +3634,7 @@ int main(int, char**)
                         }
                     }
 
+                    ClearDiagramLayouts();
                     UpdateDiagram();
                     LoadRuleToEditor();
                     SaveCurrentState();
@@ -3401,6 +3683,7 @@ int main(int, char**)
                 ImGui::BulletText("EOGram! - end of grammar marker");
                 ImGui::Separator();
                 ImGui::Text("Keyboard Shortcuts:");
+                ImGui::BulletText("Ctrl+N - New grammar");
                 ImGui::BulletText("Ctrl+O - Open file");
                 ImGui::BulletText("Ctrl+S - Save file");
                 ImGui::BulletText("F5 - Parse grammar");

@@ -2,6 +2,8 @@
 #include <syngt/core/Grammar.h>
 #include <cmath>
 #include <algorithm>
+#include <ostream>
+#include <istream>
 
 namespace syngt {
 namespace graphics {
@@ -334,13 +336,148 @@ void DrawObjectList::selectAllNotSelected(DrawObject* target) {
 
 void DrawObjectList::addExtendedPoint() {
     if (m_selectedList.count() != 1) return;
-    
+
     DrawObject* selected = m_items[m_selectedList[0]].get();
     DrawObject* extPoint = selected->addExtendedPoint(m_grammar);
-    
+
     if (extPoint) {
         add(std::unique_ptr<DrawObject>(extPoint));
     }
+}
+
+// ---- Layout serialization ----
+
+static void saveArrowLayout(std::ostream& out, const Arrow* arrow, const DrawObjectList& list) {
+    if (!arrow) {
+        out << -1 << "\n";
+        return;
+    }
+    const SemanticArrow* sa = dynamic_cast<const SemanticArrow*>(arrow);
+    if (sa) {
+        out << ctSemanticArrow << "\n";
+        out << sa->ward() << "\n";
+        const SemanticIDList* sems = sa->getSemantics();
+        int semCount = sems ? sems->count() : 0;
+        out << semCount << "\n";
+        for (int k = 0; k < semCount; ++k) {
+            out << sems->getID(k) << "\n";
+        }
+    } else {
+        out << ctArrow << "\n";
+        out << arrow->ward() << "\n";
+    }
+    DrawPoint* fromDP = arrow->getFromDO();
+    const DrawObject* fromDO = dynamic_cast<const DrawObject*>(fromDP);
+    out << (fromDO ? list.indexOf(fromDO) : -1) << "\n";
+}
+
+void DrawObjectList::saveLayout(std::ostream& out) const {
+    out << m_height << "\n";
+    out << m_width << "\n";
+    out << count() << "\n";
+    for (int i = 0; i < count(); ++i) {
+        const DrawObject* obj = m_items[i].get();
+        int type = obj->getType();
+        out << type << "\n" << obj->x() << "\n" << obj->y() << "\n";
+        if (type == ctDrawObjectTerminal || type == ctDrawObjectNonTerminal || type == ctDrawObjectMacro) {
+            out << static_cast<const DrawObjectLeaf*>(obj)->id() << "\n";
+        }
+    }
+    for (int i = 0; i < count(); ++i) {
+        const DrawObject* obj = m_items[i].get();
+        saveArrowLayout(out, obj->inArrow(), *this);
+        if (obj->getType() == ctDrawObjectPoint) {
+            saveArrowLayout(out, static_cast<const DrawObjectPoint*>(obj)->secondInArrow(), *this);
+        }
+    }
+}
+
+static std::unique_ptr<Arrow> loadArrowLayout(std::istream& in,
+                                               const std::vector<std::unique_ptr<DrawObject>>& items)
+{
+    int arrowType;
+    if (!(in >> arrowType)) return nullptr;
+    if (arrowType == -1) return nullptr;
+
+    int ward;
+    if (!(in >> ward)) return nullptr;
+
+    std::unique_ptr<SemanticIDList> semantics;
+    if (arrowType == ctSemanticArrow) {
+        int semCount;
+        if (!(in >> semCount)) return nullptr;
+        semantics = std::make_unique<SemanticIDList>();
+        for (int k = 0; k < semCount; ++k) {
+            int semId;
+            if (!(in >> semId)) return nullptr;
+            semantics->add(semId);
+        }
+    }
+
+    int fromIdx;
+    if (!(in >> fromIdx)) return nullptr;
+    DrawPoint* fromDO = (fromIdx >= 0 && fromIdx < static_cast<int>(items.size()))
+                            ? items[fromIdx].get()
+                            : nullptr;
+
+    if (arrowType == ctSemanticArrow) {
+        return std::make_unique<SemanticArrow>(ward, fromDO, std::move(semantics));
+    }
+    return std::make_unique<Arrow>(ward, fromDO);
+}
+
+bool DrawObjectList::loadLayout(std::istream& in, Grammar* grammar) {
+    clear();
+    m_grammar = grammar;
+
+    int height, width, objCount;
+    if (!(in >> height >> width >> objCount)) return false;
+    m_height = height;
+    m_width = width;
+
+    for (int i = 0; i < objCount; ++i) {
+        int type, x, y;
+        if (!(in >> type >> x >> y)) return false;
+
+        std::unique_ptr<DrawObject> obj;
+        if (type == ctDrawObjectTerminal) {
+            int id; if (!(in >> id)) return false;
+            obj = std::make_unique<DrawObjectTerminal>(grammar, id);
+        } else if (type == ctDrawObjectNonTerminal) {
+            int id; if (!(in >> id)) return false;
+            obj = std::make_unique<DrawObjectNonTerminal>(grammar, id);
+        } else if (type == ctDrawObjectMacro) {
+            int id; if (!(in >> id)) return false;
+            obj = std::make_unique<DrawObjectMacro>(grammar, id);
+        } else if (type == ctDrawObjectPoint) {
+            obj = std::make_unique<DrawObjectPoint>();
+        } else if (type == ctDrawObjectExtendedPoint) {
+            obj = std::make_unique<DrawObjectExtendedPoint>();
+        } else if (type == ctDrawObjectFirst) {
+            obj = std::make_unique<DrawObjectFirst>();
+        } else if (type == ctDrawObjectLast) {
+            obj = std::make_unique<DrawObjectLast>();
+        } else {
+            return false;
+        }
+
+        obj->setPosition(x, y);
+        add(std::move(obj));
+    }
+
+    for (int i = 0; i < objCount; ++i) {
+        DrawObject* obj = m_items[i].get();
+        auto arrow = loadArrowLayout(in, m_items);
+        if (arrow) obj->setInArrow(std::move(arrow));
+
+        if (obj->getType() == ctDrawObjectPoint) {
+            auto* pt = static_cast<DrawObjectPoint*>(obj);
+            auto arrow2 = loadArrowLayout(in, m_items);
+            if (arrow2) pt->setSecondInArrow(std::move(arrow2));
+        }
+    }
+
+    return true;
 }
 
 } // namespace graphics
