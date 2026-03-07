@@ -455,17 +455,39 @@ void RenderDiagram(ImDrawList* drawList, const ImVec2& offset, float scale) {
             if (from) {
                 float x1 = offset.x + from->endX() * scale;
                 float y1 = offset.y + from->y() * scale;
-                
+
                 ImVec2 fromPos = ImVec2(x1, y1);
                 ImVec2 toPos = ImVec2(x, y);
-                
+
                 drawList->AddLine(fromPos, toPos, currentColor, thickness);
-                
+
                 int ward = arrow->ward();
                 if (ward > 0) {  // cwFORWARD: arrowhead at destination
                     DrawArrowhead(drawList, fromPos, toPos, currentColor, scale);
                 } else if (ward < 0) {  // cwBACKWARD: arrowhead at source
                     DrawArrowhead(drawList, toPos, fromPos, currentColor, scale);
+                }
+
+                auto* semArrow = dynamic_cast<syngt::graphics::SemanticArrow*>(arrow);
+                if (semArrow && grammar) {
+                    syngt::SemanticIDList* semList = semArrow->getSemantics();
+                    if (semList && !semList->isEmpty()) {
+                        std::string label;
+                        for (int si = 0; si < semList->count(); si++) {
+                            if (si > 0) label += ' ';
+                            label += grammar->semantics()->getString(semList->getID(si));
+                        }
+                        float midX = (fromPos.x + toPos.x) * 0.5f;
+                        float midY = (fromPos.y + toPos.y) * 0.5f;
+                        ImVec2 textSize = ImGui::CalcTextSize(label.c_str());
+                        float fontSize = ImGui::GetFontSize() * scale;
+                        textSize.x *= scale;
+                        textSize.y *= scale;
+                        const ImU32 semColor = IM_COL32(0, 100, 180, 255);
+                        drawList->AddText(ImGui::GetFont(), fontSize,
+                            ImVec2(midX - textSize.x * 0.5f, midY - textSize.y - 2.0f * scale),
+                            semColor, label.c_str());
+                    }
                 }
             }
         }
