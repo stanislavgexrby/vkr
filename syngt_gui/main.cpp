@@ -54,6 +54,7 @@ void EliminateRightRecursion();
 void EliminateBothRecursions();
 void MinimizeGrammar();
 void AnalyzeRecursion();
+static void RefreshRecursionResults();
 void ExtractRule();
 void Substitute();
 void ToggleMacro();
@@ -1820,9 +1821,10 @@ void ParseGrammar(bool clearLayouts = true) {
         AppendOutput(stats);
         
         SaveCurrentState();
-        
+
         UpdateDiagram();
-        
+        RefreshRecursionResults();
+
     } catch (const std::exception& e) {
         ClearOutput();
         AppendOutput("Parse Error:\n");
@@ -1992,6 +1994,7 @@ void EliminateLeftRecursion() {
         SaveCurrentState();
         ClearDiagramLayouts();
         UpdateDiagram();
+        RefreshRecursionResults();
     } catch (const std::exception& e) {
         ClearOutput();
         AppendOutput("Error:\n");
@@ -2025,6 +2028,7 @@ void EliminateRightRecursion() {
         SaveCurrentState();
         ClearDiagramLayouts();
         UpdateDiagram();
+        RefreshRecursionResults();
     } catch (const std::exception& e) {
         ClearOutput();
         AppendOutput("Error:\n");
@@ -2058,6 +2062,7 @@ void EliminateBothRecursions() {
         SaveCurrentState();
         ClearDiagramLayouts();
         UpdateDiagram();
+        RefreshRecursionResults();
     } catch (const std::exception& e) {
         ClearOutput();
         AppendOutput("Error:\n");
@@ -2091,6 +2096,7 @@ void MinimizeGrammar() {
         SaveCurrentState();
         ClearDiagramLayouts();
         UpdateDiagram();
+        RefreshRecursionResults();
     } catch (const std::exception& e) {
         ClearOutput();
         AppendOutput("Error:\n");
@@ -2099,21 +2105,21 @@ void MinimizeGrammar() {
     }
 }
 
+static void RefreshRecursionResults() {
+    if (!grammar) return;
+    try {
+        recursionResults = syngt::RecursionAnalyzer::analyze(grammar.get());
+    } catch (...) {}
+}
+
 void AnalyzeRecursion() {
     if (!grammar) {
         ClearOutput();
         AppendOutput("Please parse grammar first!\n");
         return;
     }
-    try {
-        recursionResults = syngt::RecursionAnalyzer::analyze(grammar.get());
-        showRecursionWindow = true;
-    } catch (const std::exception& e) {
-        ClearOutput();
-        AppendOutput("Error:\n");
-        AppendOutput(e.what());
-        AppendOutput("\n");
-    }
+    RefreshRecursionResults();
+    showRecursionWindow = true;
 }
 
 // ---------------------------------------------------------------------------
@@ -3403,6 +3409,20 @@ int main(int, char**)
         if (ImGui::Button("Close All Definitions", ImVec2(-FLT_MIN, 0))) {
             CloseAllDefinitions();
         }
+        ImGui::Separator();
+        ImGui::Text("Semantics");
+        if (grammar) {
+            auto semItems = grammar->getSemantics();
+            if (semItems.empty()) {
+                ImGui::TextDisabled("(none)");
+            } else {
+                for (const auto& s : semItems) {
+                    ImGui::TextUnformatted(s.c_str());
+                }
+            }
+        } else {
+            ImGui::TextDisabled("(no grammar)");
+        }
         ImGui::EndChild();
         
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.8f, 0.8f, 1.0f));
@@ -3554,12 +3574,14 @@ int main(int, char**)
             ImGui::OpenPopup("Recursion Analysis");
             if (ImGui::BeginPopupModal("Recursion Analysis", &showRecursionWindow,
                                        ImGuiWindowFlags_AlwaysAutoResize)) {
-                if (ImGui::BeginTable("RecTable", 4,
+                bool needRefresh = false;
+                if (ImGui::BeginTable("RecTable", 5,
                                       ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
                     ImGui::TableSetupColumn("Nonterminal");
                     ImGui::TableSetupColumn("Left Recursion");
                     ImGui::TableSetupColumn("Recursion");
                     ImGui::TableSetupColumn("Right Recursion");
+                    ImGui::TableSetupColumn("Actions");
                     ImGui::TableHeadersRow();
                     for (const auto& r : recursionResults) {
                         ImGui::TableNextRow();
@@ -3567,10 +3589,39 @@ int main(int, char**)
                         ImGui::TableSetColumnIndex(1); ImGui::TextUnformatted(r.leftRecursion.c_str());
                         ImGui::TableSetColumnIndex(2); ImGui::TextUnformatted(r.anyRecursion.c_str());
                         ImGui::TableSetColumnIndex(3); ImGui::TextUnformatted(r.rightRecursion.c_str());
+                        ImGui::TableSetColumnIndex(4);
+                        if (r.leftRecursion == "direct") {
+                            if (ImGui::SmallButton(("Elim L##" + r.name).c_str())) {
+                                syngt::NTListItem* nt = grammar->getNTItem(r.name);
+                                if (nt) {
+                                    syngt::LeftElimination::eliminateForNonTerminal(nt, grammar.get());
+                                    UpdateGrammarText();
+                                    SaveCurrentState();
+                                    needRefresh = true;
+                                }
+                            }
+                            ImGui::SameLine();
+                        }
+                        if (r.rightRecursion == "direct") {
+                            if (ImGui::SmallButton(("Elim R##" + r.name).c_str())) {
+                                syngt::NTListItem* nt = grammar->getNTItem(r.name);
+                                if (nt) {
+                                    syngt::RightElimination::eliminateForNonTerminal(nt, grammar.get());
+                                    UpdateGrammarText();
+                                    SaveCurrentState();
+                                    needRefresh = true;
+                                }
+                            }
+                        }
                     }
                     ImGui::EndTable();
                 }
+                if (needRefresh) {
+                    RefreshRecursionResults();
+                }
                 ImGui::Separator();
+                if (ImGui::Button("Refresh")) RefreshRecursionResults();
+                ImGui::SameLine();
                 if (ImGui::Button("Close")) showRecursionWindow = false;
                 ImGui::EndPopup();
             }
@@ -3754,7 +3805,8 @@ void BuildRule() {
         
         RebuildGrammarFromText();
         SaveCurrentState();
-        
+        RefreshRecursionResults();
+
         ClearOutput();
         AppendOutput("Rule updated for '");
         AppendOutput(ntName.c_str());

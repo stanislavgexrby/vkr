@@ -12,8 +12,6 @@
 #include <syngt/utils/Semantic.h>
 #include <syngt/core/Grammar.h>
 
-#include <functional>
-
 namespace syngt {
 
 using namespace graphics;
@@ -65,7 +63,7 @@ DrawObject* RETerminal::drawObjectsToRight(
     int& height
 ) const {
     if (m_id != 0) {
-        height = NS_Radius * 2;
+        height = ElementHalfHeight;
     } else {
         height = 0;
     }
@@ -120,19 +118,8 @@ DrawObject* REOr::drawObjectsToRight(
     int ward,
     int& height
 ) const {
-    std::function<void(const RETree*, std::vector<const RETree*>&)> flatten;
-    flatten = [&](const RETree* node, std::vector<const RETree*>& out) {
-        if (!node) return;
-        if (auto orNode = dynamic_cast<const REOr*>(node)) {
-            flatten(orNode->m_first.get(), out);
-            flatten(orNode->m_second.get(), out);
-        } else {
-            out.push_back(node);
-        }
-    };
-
-    std::vector<const RETree*> alternatives;
-    flatten(this, alternatives);
+    // Pascal binary recursive approach: two branches, top and bottom,
+    // joined at a single joinPoint via inArrow (top) and secondInArrow (bottom).
 
     int curWard = ((ward == cwBACKWARD) && fromDO->needSpike()) ?
         cwBACKWARD : cwNONE;
@@ -150,96 +137,68 @@ DrawObject* REOr::drawObjectsToRight(
     leftPoint->setPlaceToRight();
 
     DrawObjectPoint* leftPtr = leftPoint.get();
-    const int baseX = leftPtr->x();
-    const int baseY = leftPtr->y();
+    const int leftX = leftPtr->x();
+    const int leftY = leftPtr->y();
     list->add(std::move(leftPoint));
 
-    std::vector<DrawObject*> branchEnds;
-    std::vector<int> branchHeights;
-    
-    const int minVerticalSpacing = 60;
-    int maxBranchHeight = 0;
-    int currentY = baseY;
+    // Draw first (top) branch
+    int height1 = 0;
+    SemanticIDList* sem1 = nullptr;
+    DrawObject* firstEnd = m_first->drawObjectsToRight(list, sem1, leftPtr, ward, height1);
 
-    for (size_t i = 0; i < alternatives.size(); ++i) {
-        DrawObjectPoint* branchStart = nullptr;
-        int branchY = currentY;
-
-        if (i == 0) {
-            branchStart = leftPtr;
-        } else {
-            auto branchJoin = std::make_unique<DrawObjectPoint>();
-            branchJoin->setPosition(baseX, branchY);
-            branchJoin->setInArrow(std::make_unique<Arrow>(cwNONE, leftPtr));
-            branchStart = branchJoin.get();
-            list->add(std::move(branchJoin));
-        }
-
-        int branchHeight = 0;
-        SemanticIDList* sem = nullptr;
-
-        DrawObject* branchEnd = alternatives[i]->drawObjectsToRight(
-            list, sem, branchStart, ward, branchHeight
+    // Join point receives first branch
+    auto joinPoint = std::make_unique<DrawObjectPoint>();
+    int curWard1 = (ward == cwBACKWARD && firstEnd->needSpike()) ? cwBACKWARD : cwNONE;
+    if (sem1 == nullptr) {
+        joinPoint->setInArrow(std::make_unique<Arrow>(curWard1, firstEnd));
+    } else {
+        auto arrow = std::make_unique<SemanticArrow>(
+            curWard1, firstEnd, std::unique_ptr<SemanticIDList>(sem1)
         );
-
-        if (branchHeight > maxBranchHeight) {
-            maxBranchHeight = branchHeight;
-        }
-
-        branchEnds.push_back(branchEnd);
-        branchHeights.push_back(branchHeight);
-        
-        if (i < alternatives.size() - 1) {
-            int spacing = std::max(branchHeight + 20, minVerticalSpacing);
-            currentY += spacing;
-        }
+        joinPoint->setInArrow(std::move(arrow));
     }
+    joinPoint->setPlaceToRight();
+    DrawObjectPoint* joinPtr = joinPoint.get();
+    list->add(std::move(joinPoint));
 
-    int maxEndX = baseX;
-    for (auto* branchEnd : branchEnds) {
-        if (branchEnd->endX() > maxEndX)
-            maxEndX = branchEnd->endX();
-    }
-    maxEndX += MinArrowLength;
+    // Down point below left fork
+    int downY = leftY + height1 + VerticalSpace;
+    auto downPoint = std::make_unique<DrawObjectPoint>();
+    downPoint->setInArrow(std::make_unique<Arrow>(cwNONE, leftPtr));
+    downPoint->setPosition(leftX, downY);
+    DrawObjectPoint* downPtr = downPoint.get();
+    list->add(std::move(downPoint));
 
-    DrawObjectPoint* currentPoint = nullptr;
-    currentY = baseY;
-    
-    for (int i = static_cast<int>(branchEnds.size()) - 1; i >= 0; --i) {
-        int branchY = baseY;
-        for (int j = 0; j < i; ++j) {
-            int spacing = std::max(branchHeights[j] + 20, minVerticalSpacing);
-            branchY += spacing;
-        }
-        
-        if (i == static_cast<int>(branchEnds.size()) - 1) {
-            auto joinPoint = std::make_unique<DrawObjectPoint>();
-            joinPoint->setPosition(maxEndX, branchY);
-            joinPoint->setInArrow(std::make_unique<Arrow>(cwNONE, branchEnds[i]));
-            
-            currentPoint = joinPoint.get();
-            list->add(std::move(joinPoint));
-        } else {
-            auto joinPoint = std::make_unique<DrawObjectPoint>();
-            joinPoint->setPosition(maxEndX, branchY);
-            joinPoint->setInArrow(std::make_unique<Arrow>(cwNONE, branchEnds[i]));
-            joinPoint->setSecondInArrow(std::make_unique<Arrow>(cwNONE, currentPoint));
-            
-            currentPoint = joinPoint.get();
-            list->add(std::move(joinPoint));
-        }
-    }
-    
-    DrawObject* finalPoint = currentPoint;
-    
-    int lastBranchY = baseY;
-    for (size_t i = 0; i < branchHeights.size() - 1; ++i) {
-        int spacing = std::max(branchHeights[i] + 20, minVerticalSpacing);
-        lastBranchY += spacing;
-    }
-    height = (lastBranchY - baseY) + branchHeights.back() + 20;
+    // Draw second (bottom) branch
+    int height2 = 0;
+    SemanticIDList* sem2 = nullptr;
+    DrawObject* secondEnd = m_second->drawObjectsToRight(list, sem2, downPtr, ward, height2);
 
-    return finalPoint;
+    // Second end point receives second branch
+    auto secondPoint = std::make_unique<DrawObjectPoint>();
+    if (sem2 == nullptr) {
+        secondPoint->setInArrow(std::make_unique<Arrow>(cwNONE, secondEnd));
+    } else {
+        auto arrow = std::make_unique<SemanticArrow>(
+            cwNONE, secondEnd, std::unique_ptr<SemanticIDList>(sem2)
+        );
+        secondPoint->setInArrow(std::move(arrow));
+    }
+    DrawObjectPoint* secondPtr = secondPoint.get();
+    list->add(std::move(secondPoint));
+
+    // Align both endpoints to maxX
+    int maxX = std::max(firstEnd->endX(), secondEnd->endX()) + MinArrowLength;
+    joinPtr->setPosition(maxX, leftY);
+    secondPtr->setPosition(maxX, downY);
+
+    // Connect joinPoint to secondPoint via secondInArrow (arrow going "up" to merge)
+    int curWardUp = (ward == cwFORWARD) ? cwFORWARD : cwNONE;
+    joinPtr->setSecondInArrow(std::make_unique<Arrow>(curWardUp, secondPtr));
+
+    height = height1 + VerticalSpace + std::max(height2, ElementHalfHeight);
+
+    return joinPtr;
 }
 
 // REIteration::drawObjectsToRight
@@ -276,7 +235,7 @@ DrawObject* REIteration::drawObjectsToRight(
         list, sem1, leftPtr, ward, height1
     );
     
-    int downY = leftY + VerticalSpace + std::max(height1, NS_Radius);
+    int downY = leftY + VerticalSpace + std::max(height1, ElementHalfHeight);
     
     int curWardDown = (ward == cwFORWARD) ? cwBACKWARD : cwNONE;
     auto downPoint = std::make_unique<DrawObjectPoint>();
@@ -334,7 +293,7 @@ DrawObject* REIteration::drawObjectsToRight(
     if (height2 > 0) {
         cy += height2;
     } else {
-        cy += NS_Radius;
+        cy += ElementHalfHeight;
     }
     height = (height1 > cy) ? height1 : cy;
     
@@ -356,8 +315,8 @@ DrawObject* RENonTerminal::drawObjectsToRight(
         }
     }
     
-    height = NS_Radius * 2;
-    
+    height = ElementHalfHeight;
+
     auto nonTerminal = std::make_unique<DrawObjectNonTerminal>(m_grammar, m_id);
     nonTerminal->setInArrow(makeArrowForwardAlways(fromDO, ward, semantics));
     nonTerminal->setPlaceToRight();
