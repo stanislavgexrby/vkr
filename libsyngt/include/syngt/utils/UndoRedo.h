@@ -24,6 +24,7 @@ struct UndoState {
     std::vector<bool> ntMacroFlags;       // Флаги макросов (isMacro)
     int activeIndex = 0;                  // Индекс активного нетерминала
     SelectionMask selection;              // Маска выделенных объектов
+    std::string grammarText;              // Полный текст грамматики (для точного восстановления)
     
     UndoState* prev = nullptr;
     UndoState* next = nullptr;
@@ -78,7 +79,8 @@ public:
                   const std::vector<std::string>& ntValues,
                   const std::vector<bool>& ntMacroFlags,
                   int activeIndex,
-                  const SelectionMask& selection);
+                  const SelectionMask& selection,
+                  const std::string& grammarText = {});
     
     /**
      * @brief Шаг назад (Undo)
@@ -94,7 +96,8 @@ public:
                   std::vector<std::string>& outValues,
                   std::vector<bool>& outMacroFlags,
                   int& outActiveIndex,
-                  SelectionMask& outSelection);
+                  SelectionMask& outSelection,
+                  std::string& outGrammarText);
 
     /**
      * @brief Шаг вперед (Redo)
@@ -104,13 +107,15 @@ public:
      * @param outMacroFlags Возвращает флаги макросов следующего состояния
      * @param outActiveIndex Возвращает индекс активного нетерминала
      * @param outSelection Возвращает маску выделения
+     * @param outGrammarText Возвращает полный текст грамматики
      * @return true если повтор успешен, false если достигнут конец
      */
     bool stepForward(std::vector<std::string>& outNames,
                      std::vector<std::string>& outValues,
                      std::vector<bool>& outMacroFlags,
                      int& outActiveIndex,
-                     SelectionMask& outSelection);
+                     SelectionMask& outSelection,
+                     std::string& outGrammarText);
     
     /**
      * @brief Очистить все данные

@@ -755,7 +755,7 @@ void SaveCurrentState() {
         macroFlags.push_back(item ? item->isMacro() : false);
     }
 
-    undoRedo.addState(names, values, macroFlags, activeNTIndex, selectionMask);
+    undoRedo.addState(names, values, macroFlags, activeNTIndex, selectionMask, grammarText);
 }
 
 void SaveCurrentDiagramToCache() {
@@ -855,13 +855,16 @@ void Undo() {
         std::vector<bool> macroFlags;
         int index = activeNTIndex;
         syngt::SelectionMask selection = selectionMask;
+        std::string restoredGrammarText;
 
-        undoRedo.stepBack(names, values, macroFlags, index, selection);
+        undoRedo.stepBack(names, values, macroFlags, index, selection, restoredGrammarText);
 
-        std::string restoredText = buildRestoredText(names, values, macroFlags);
+        if (restoredGrammarText.empty()) {
+            restoredGrammarText = buildRestoredText(names, values, macroFlags);
+        }
 
-        if (restoredText.size() < sizeof(grammarText)) {
-            strcpy_s(grammarText, sizeof(grammarText), restoredText.c_str());
+        if (restoredGrammarText.size() < sizeof(grammarText)) {
+            strcpy_s(grammarText, sizeof(grammarText), restoredGrammarText.c_str());
             grammarWidgetVersion++;
         }
 
@@ -890,13 +893,16 @@ void Redo() {
         std::vector<bool> macroFlags;
         int index = activeNTIndex;
         syngt::SelectionMask selection = selectionMask;
+        std::string restoredGrammarText;
 
-        undoRedo.stepForward(names, values, macroFlags, index, selection);
+        undoRedo.stepForward(names, values, macroFlags, index, selection, restoredGrammarText);
 
-        std::string restoredText = buildRestoredText(names, values, macroFlags);
+        if (restoredGrammarText.empty()) {
+            restoredGrammarText = buildRestoredText(names, values, macroFlags);
+        }
 
-        if (restoredText.size() < sizeof(grammarText)) {
-            strcpy_s(grammarText, sizeof(grammarText), restoredText.c_str());
+        if (restoredGrammarText.size() < sizeof(grammarText)) {
+            strcpy_s(grammarText, sizeof(grammarText), restoredGrammarText.c_str());
             grammarWidgetVersion++;
         }
 
@@ -1024,6 +1030,166 @@ bool RenameNonTerminal(int oldId, const std::string& newName) {
     }
     
     return false;
+}
+
+void DeleteNonTerminal(int id) {
+    if (!grammar) return;
+    auto nts = grammar->getNonTerminals();
+    if (id < 0 || id >= static_cast<int>(nts.size())) return;
+
+    std::string ntName = nts[id];
+    std::string text = grammarText;
+
+    // Find "ntName :" or "ntName:" and the closing "." for that rule
+    size_t ruleStart = std::string::npos;
+    size_t searchPos = 0;
+    while (searchPos < text.size()) {
+        size_t found = text.find(ntName, searchPos);
+        if (found == std::string::npos) break;
+        bool atStart = (found == 0 || (!isalnum(text[found - 1]) && text[found - 1] != '_'));
+        size_t afterName = found + ntName.size();
+        // Skip whitespace
+        size_t ws = afterName;
+        while (ws < text.size() && (text[ws] == ' ' || text[ws] == '\t')) ws++;
+        if (atStart && ws < text.size() && text[ws] == ':') {
+            ruleStart = found;
+            break;
+        }
+        searchPos = found + 1;
+    }
+
+    if (ruleStart == std::string::npos) {
+        ClearOutput();
+        AppendOutput("Could not find rule for '");
+        AppendOutput(ntName.c_str());
+        AppendOutput("'\n");
+        return;
+    }
+
+    // Find the closing '.' — skip nested parens/brackets and comments
+    size_t colonPos = text.find(':', ruleStart);
+    if (colonPos == std::string::npos) return;
+
+    size_t dotPos = std::string::npos;
+    int depth = 0;
+    for (size_t i = colonPos + 1; i < text.size(); i++) {
+        char c = text[i];
+        if (c == '(' || c == '[') depth++;
+        else if (c == ')' || c == ']') depth--;
+        else if (c == '{') {
+            // skip comment
+            while (i < text.size() && text[i] != '}') i++;
+        } else if (c == '.' && depth == 0) {
+            dotPos = i;
+            break;
+        }
+    }
+    if (dotPos == std::string::npos) return;
+
+    // Erase from ruleStart to dotPos+1, and any trailing newline
+    size_t eraseEnd = dotPos + 1;
+    while (eraseEnd < text.size() && (text[eraseEnd] == '\r' || text[eraseEnd] == '\n'))
+        eraseEnd++;
+    // Also trim leading newlines before ruleStart that belong to the blank line
+    size_t eraseStart = ruleStart;
+    while (eraseStart > 0 && (text[eraseStart - 1] == '\r' || text[eraseStart - 1] == '\n'))
+        eraseStart--;
+    // Keep one newline separator if there's content before
+    if (eraseStart > 0) eraseStart++; // leave one '\n' from previous line
+
+    text.erase(eraseStart, eraseEnd - eraseStart);
+
+    if (text.size() < sizeof(grammarText)) {
+        strcpy_s(grammarText, sizeof(grammarText), text.c_str());
+        grammarWidgetVersion++;
+        if (activeNTIndex >= id && activeNTIndex > 0)
+            activeNTIndex--;
+        RebuildGrammarFromText();
+        SaveCurrentState();
+        ClearOutput();
+        AppendOutput("Deleted non-terminal '");
+        AppendOutput(ntName.c_str());
+        AppendOutput("'\n");
+    }
+}
+
+void DeleteTerminal(int id) {
+    if (!grammar) return;
+    auto terminals = grammar->getTerminals();
+    if (id < 0 || id >= static_cast<int>(terminals.size())) return;
+
+    std::string termName = terminals[id];
+    std::string quoted = "'" + termName + "'";
+    std::string text = grammarText;
+
+    size_t pos = 0;
+    while ((pos = text.find(quoted, pos)) != std::string::npos) {
+        size_t eraseStart = pos;
+        size_t eraseEnd = pos + quoted.size();
+        // Try to eat a preceding ", " separator
+        size_t before = eraseStart;
+        while (before > 0 && text[before - 1] == ' ') before--;
+        if (before > 0 && text[before - 1] == ',') {
+            eraseStart = before - 1;
+        } else {
+            // Try to eat a trailing " , " separator
+            size_t after = eraseEnd;
+            while (after < text.size() && text[after] == ' ') after++;
+            if (after < text.size() && text[after] == ',') {
+                eraseEnd = after + 1;
+            }
+        }
+        text.erase(eraseStart, eraseEnd - eraseStart);
+        pos = eraseStart;
+    }
+
+    if (text.size() < sizeof(grammarText)) {
+        strcpy_s(grammarText, sizeof(grammarText), text.c_str());
+        grammarWidgetVersion++;
+        RebuildGrammarFromText();
+        SaveCurrentState();
+        ClearOutput();
+        AppendOutput("Deleted terminal '");
+        AppendOutput(termName.c_str());
+        AppendOutput("'\n");
+    }
+}
+
+void DeleteSemantic(const std::string& name) {
+    if (!grammar) return;
+    // name already includes '$' prefix (stored as "$add" etc.)
+    std::string token = name;
+    std::string text = grammarText;
+
+    size_t pos = 0;
+    while ((pos = text.find(token, pos)) != std::string::npos) {
+        // Check word boundary after token
+        size_t afterToken = pos + token.size();
+        bool wordEnd = (afterToken >= text.size() || (!isalnum(text[afterToken]) && text[afterToken] != '_'));
+        if (!wordEnd) { pos++; continue; }
+
+        size_t eraseStart = pos;
+        size_t eraseEnd = afterToken;
+        // Eat preceding ", " separator
+        size_t before = eraseStart;
+        while (before > 0 && text[before - 1] == ' ') before--;
+        if (before > 0 && text[before - 1] == ',') {
+            eraseStart = before - 1;
+        }
+        text.erase(eraseStart, eraseEnd - eraseStart);
+        pos = eraseStart;
+    }
+
+    if (text.size() < sizeof(grammarText)) {
+        strcpy_s(grammarText, sizeof(grammarText), text.c_str());
+        grammarWidgetVersion++;
+        RebuildGrammarFromText();
+        SaveCurrentState();
+        ClearOutput();
+        AppendOutput("Deleted semantic '");
+        AppendOutput(name.c_str());
+        AppendOutput("'\n");
+    }
 }
 
 void DeleteSelectedObjects() {
@@ -2941,10 +3107,11 @@ int main(int, char**)
                         activeNTIndex = 0;
                     }
                     
+                    ImGui::SetNextItemWidth(-70.0f);
                     if (ImGui::BeginCombo("##nt_select", nts[activeNTIndex].c_str())) {
                         for (int i = 0; i < static_cast<int>(nts.size()); ++i) {
                             bool is_selected = (activeNTIndex == i);
-                            
+
                             std::string label = nts[i];
                             syngt::NTListItem* item = grammar->getNTItem(nts[i]);
 
@@ -2952,7 +3119,7 @@ int main(int, char**)
                             if (!item || !item->hasRoot()) {
                                 label += " [eps]";
                             }
-                            
+
                             if (ImGui::Selectable(label.c_str(), is_selected)) {
                                 activeNTIndex = i;
                                 UpdateDiagram();
@@ -2964,7 +3131,13 @@ int main(int, char**)
                         }
                         ImGui::EndCombo();
                     }
-                    
+                    ImGui::SameLine();
+                    if (ImGui::Button("Delete##nt", ImVec2(-FLT_MIN, 0))) {
+                        DeleteNonTerminal(activeNTIndex);
+                        UpdateDiagram();
+                        LoadRuleToEditor();
+                    }
+
                     ImGui::Separator();
                     
                     ImGui::BeginChild("DiagramCanvas", ImVec2(0, 0), false, ImGuiWindowFlags_HorizontalScrollbar);
@@ -3442,8 +3615,15 @@ int main(int, char**)
             if (semItems.empty()) {
                 ImGui::TextDisabled("(none)");
             } else {
-                for (const auto& s : semItems) {
-                    ImGui::TextUnformatted(s.c_str());
+                for (int si = 0; si < static_cast<int>(semItems.size()); ++si) {
+                    ImGui::PushID(si);
+                    ImGui::TextUnformatted(semItems[si].c_str());
+                    ImGui::SameLine();
+                    if (ImGui::SmallButton("x")) {
+                        DeleteSemantic(semItems[si]);
+                        UpdateDiagram();
+                    }
+                    ImGui::PopID();
                 }
             }
         } else {

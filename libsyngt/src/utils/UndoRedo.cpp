@@ -53,7 +53,8 @@ void UndoRedo::addState(const std::vector<std::string>& ntNames,
                         const std::vector<std::string>& ntValues,
                         const std::vector<bool>& ntMacroFlags,
                         int activeIndex,
-                        const SelectionMask& selection) {
+                        const SelectionMask& selection,
+                        const std::string& grammarText) {
 
     UndoState* next = m_current ? m_current->next : nullptr;
 
@@ -62,6 +63,7 @@ void UndoRedo::addState(const std::vector<std::string>& ntNames,
     newState->ntValues = ntValues;
     newState->ntMacroFlags = ntMacroFlags;
     newState->activeIndex = activeIndex;
+    newState->grammarText = grammarText;
     
     if (m_current && !selection.empty()) {
         m_current->selection = selection;
@@ -92,7 +94,8 @@ bool UndoRedo::stepBack(std::vector<std::string>& outNames,
                         std::vector<std::string>& outValues,
                         std::vector<bool>& outMacroFlags,
                         int& outActiveIndex,
-                        SelectionMask& outSelection) {
+                        SelectionMask& outSelection,
+                        std::string& outGrammarText) {
 
     if (!canUndo()) {
         return false;
@@ -105,6 +108,7 @@ bool UndoRedo::stepBack(std::vector<std::string>& outNames,
     outMacroFlags = m_current->ntMacroFlags;
     outActiveIndex = m_current->activeIndex;
     outSelection = m_current->selection;
+    outGrammarText = m_current->grammarText;
 
     return true;
 }
@@ -113,7 +117,8 @@ bool UndoRedo::stepForward(std::vector<std::string>& outNames,
                            std::vector<std::string>& outValues,
                            std::vector<bool>& outMacroFlags,
                            int& outActiveIndex,
-                           SelectionMask& outSelection) {
+                           SelectionMask& outSelection,
+                           std::string& outGrammarText) {
 
     if (!canRedo()) {
         return false;
@@ -126,6 +131,7 @@ bool UndoRedo::stepForward(std::vector<std::string>& outNames,
     outMacroFlags = m_current->ntMacroFlags;
     outActiveIndex = m_current->activeIndex;
     outSelection = m_current->selection;
+    outGrammarText = m_current->grammarText;
 
     return true;
 }

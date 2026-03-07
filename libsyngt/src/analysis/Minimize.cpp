@@ -86,8 +86,9 @@ static void buildMinimizationTable(const RETree* node,
             // epsilon — same as empty terminal
             table.linkStates(rec.start, rec.finish, "\"\"");
         } else {
-            // named semantic: store without quotes → treated as NT by DFAToRegex
-            table.linkStates(rec.start, rec.finish, "$" + name);
+            // Store with $ prefix so DFAToRegex recognises it as a semantic.
+            // name already contains '$' (e.g. "$add"), store as-is.
+            table.linkStates(rec.start, rec.finish, name);
         }
         return;
     }

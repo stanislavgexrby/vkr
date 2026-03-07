@@ -3,6 +3,7 @@
 #include <syngt/regex/RETree.h>
 #include <syngt/regex/RETerminal.h>
 #include <syngt/regex/RENonTerminal.h>
+#include <syngt/regex/RESemantic.h>
 #include <syngt/regex/REOr.h>
 #include <syngt/regex/REAnd.h>
 #include <syngt/regex/REIteration.h>
@@ -64,11 +65,18 @@ std::unique_ptr<DFAToRegex> DFAToRegex::fromMinimizationTable(
             std::string symbolName = table->getSymbol(iSymbol);
             std::unique_ptr<RETree> tree;
             
-            if (symbolName.size() >= 2 && 
+            if (symbolName.size() >= 2 &&
                 (symbolName[0] == '"' || symbolName[0] == '\'')) {
                 std::string content = symbolName.substr(1, symbolName.size() - 2);
                 int termId = grammar->addTerminal(content);
                 tree = std::make_unique<RETerminal>(grammar, termId);
+            } else if (!symbolName.empty() && symbolName[0] == '$') {
+                // Semantic action (name stored with '$' prefix, e.g. "$add")
+                int semId = grammar->findSemantic(symbolName);
+                if (semId < 0) {
+                    semId = grammar->addSemantic(symbolName);
+                }
+                tree = std::make_unique<RESemantic>(grammar, semId);
             } else {
                 int ntId = grammar->findNonTerminal(symbolName);
                 if (ntId < 0) {

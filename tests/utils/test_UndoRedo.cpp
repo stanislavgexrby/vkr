@@ -49,7 +49,8 @@ TEST(UndoRedoTest, CanRedoAfterUndo) {
     std::vector<bool> macros;
     int idx;
     SelectionMask sel;
-    ur.stepBack(names, values, macros, idx, sel);
+    std::string gt;
+    ur.stepBack(names, values, macros, idx, sel, gt);
 
     EXPECT_TRUE(ur.canRedo());
 }
@@ -67,8 +68,9 @@ TEST(UndoRedoTest, UndoRestoresPreviousState) {
     std::vector<bool> macros;
     int idx;
     SelectionMask sel;
+    std::string gt;
 
-    bool ok = ur.stepBack(names, values, macros, idx, sel);
+    bool ok = ur.stepBack(names, values, macros, idx, sel, gt);
     EXPECT_TRUE(ok);
     ASSERT_EQ(names.size(), 1u);
     EXPECT_EQ(names[0], "E");
@@ -83,8 +85,9 @@ TEST(UndoRedoTest, UndoReturnsFalseAtBeginning) {
     std::vector<bool> macros;
     int idx;
     SelectionMask sel;
+    std::string gt;
 
-    bool ok = ur.stepBack(names, values, macros, idx, sel);
+    bool ok = ur.stepBack(names, values, macros, idx, sel, gt);
     EXPECT_FALSE(ok);
 }
 
@@ -98,11 +101,12 @@ TEST(UndoRedoTest, MultipleUndoSteps) {
     std::vector<bool> macros;
     int idx;
     SelectionMask sel;
+    std::string gt;
 
-    ur.stepBack(names, values, macros, idx, sel);
+    ur.stepBack(names, values, macros, idx, sel, gt);
     EXPECT_EQ(values[0], "'b'.");
 
-    ur.stepBack(names, values, macros, idx, sel);
+    ur.stepBack(names, values, macros, idx, sel, gt);
     EXPECT_EQ(values[0], "'a'.");
 
     // Can't go back further
@@ -122,11 +126,12 @@ TEST(UndoRedoTest, RedoRestoresNextState) {
     std::vector<bool> macros;
     int idx;
     SelectionMask sel;
+    std::string gt;
 
-    ur.stepBack(names, values, macros, idx, sel);
+    ur.stepBack(names, values, macros, idx, sel, gt);
     EXPECT_EQ(values[0], "'a'.");
 
-    bool ok = ur.stepForward(names, values, macros, idx, sel);
+    bool ok = ur.stepForward(names, values, macros, idx, sel, gt);
     EXPECT_TRUE(ok);
     EXPECT_EQ(values[0], "'b'.");
 }
@@ -140,8 +145,9 @@ TEST(UndoRedoTest, RedoReturnsFalseAtEnd) {
     std::vector<bool> macros;
     int idx;
     SelectionMask sel;
+    std::string gt;
 
-    bool ok = ur.stepForward(names, values, macros, idx, sel);
+    bool ok = ur.stepForward(names, values, macros, idx, sel, gt);
     EXPECT_FALSE(ok);
 }
 
@@ -155,11 +161,12 @@ TEST(UndoRedoTest, UndoRedoRoundTrip) {
     std::vector<bool> macros;
     int idx;
     SelectionMask sel;
+    std::string gt;
 
-    ur.stepBack(names, values, macros, idx, sel); // → 'y'
-    ur.stepBack(names, values, macros, idx, sel); // → 'x'
-    ur.stepForward(names, values, macros, idx, sel); // → 'y'
-    ur.stepForward(names, values, macros, idx, sel); // → 'z'
+    ur.stepBack(names, values, macros, idx, sel, gt); // → 'y'
+    ur.stepBack(names, values, macros, idx, sel, gt); // → 'x'
+    ur.stepForward(names, values, macros, idx, sel, gt); // → 'y'
+    ur.stepForward(names, values, macros, idx, sel, gt); // → 'z'
 
     EXPECT_EQ(values[0], "'z'.");
     EXPECT_FALSE(ur.canRedo());
@@ -206,8 +213,9 @@ TEST(UndoRedoTest, NewStateAfterUndoClearsRedo) {
     std::vector<bool> macros;
     int idx;
     SelectionMask sel;
+    std::string gt;
 
-    ur.stepBack(names, values, macros, idx, sel); // back to 'a'
+    ur.stepBack(names, values, macros, idx, sel, gt); // back to 'a'
     EXPECT_TRUE(ur.canRedo());
 
     // Add new state — should clear redo branch
@@ -215,7 +223,7 @@ TEST(UndoRedoTest, NewStateAfterUndoClearsRedo) {
     EXPECT_FALSE(ur.canRedo());
 
     // Undo still works: 'c' → 'a'
-    ur.stepBack(names, values, macros, idx, sel);
+    ur.stepBack(names, values, macros, idx, sel, gt);
     EXPECT_EQ(values[0], "'a'.");
 }
 
@@ -234,8 +242,9 @@ TEST(UndoRedoTest, ActiveIndexPreserved) {
     std::vector<bool> outMacros;
     int idx;
     SelectionMask outSel;
+    std::string gt;
 
-    ur.stepBack(names, values, outMacros, idx, outSel);
+    ur.stepBack(names, values, outMacros, idx, outSel, gt);
     EXPECT_EQ(idx, 1);
 }
 
@@ -251,8 +260,9 @@ TEST(UndoRedoTest, MacroFlagsPreserved) {
     std::vector<bool> outMacros;
     int idx;
     SelectionMask outSel;
+    std::string gt;
 
-    ur.stepBack(names, values, outMacros, idx, outSel);
+    ur.stepBack(names, values, outMacros, idx, outSel, gt);
     ASSERT_EQ(outMacros.size(), 2u);
     EXPECT_TRUE(outMacros[0]);
     EXPECT_FALSE(outMacros[1]);
