@@ -474,18 +474,22 @@ void RenderDiagram(ImDrawList* drawList, const ImVec2& offset, float scale) {
                     if (semList && !semList->isEmpty()) {
                         std::string label;
                         for (int si = 0; si < semList->count(); si++) {
-                            if (si > 0) label += ' ';
+                            if (si > 0) label += ',';
                             label += grammar->semantics()->getString(semList->getID(si));
                         }
-                        float midX = (fromPos.x + toPos.x) * 0.5f;
-                        float midY = (fromPos.y + toPos.y) * 0.5f;
+                        // Pascal: text drawn near arrow start (fromPos), above the line.
+                        // For cwBACKWARD the spike is at source, so shift right past it.
+                        float textX = fromPos.x + syngt::graphics::SpaceLength * scale;
+                        if (arrow->ward() < 0) {  // cwBACKWARD: spike at source
+                            textX += syngt::graphics::SpikeLength * scale;
+                        }
+                        float textY = fromPos.y;
                         ImVec2 textSize = ImGui::CalcTextSize(label.c_str());
                         float fontSize = ImGui::GetFontSize() * scale;
-                        textSize.x *= scale;
                         textSize.y *= scale;
                         const ImU32 semColor = IM_COL32(0, 100, 180, 255);
                         drawList->AddText(ImGui::GetFont(), fontSize,
-                            ImVec2(midX - textSize.x * 0.5f, midY - textSize.y - 2.0f * scale),
+                            ImVec2(textX, textY - textSize.y - 2.0f * scale),
                             semColor, label.c_str());
                     }
                 }

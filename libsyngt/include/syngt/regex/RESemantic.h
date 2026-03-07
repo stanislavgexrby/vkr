@@ -35,8 +35,16 @@ public:
     static std::unique_ptr<RESemantic> makeFromID(Grammar* grammar, int id) {
         return std::make_unique<RESemantic>(grammar, id);
     }
-    
+
     void setGrammar(Grammar* grammar) { m_grammar = grammar; }
+
+    syngt::graphics::DrawObject* drawObjectsToRight(
+        syngt::graphics::DrawObjectList* list,
+        syngt::SemanticIDList*& semantics,
+        syngt::graphics::DrawObject* fromDO,
+        int ward,
+        int& height
+    ) const override;
 };
 
 }

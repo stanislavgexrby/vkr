@@ -39,7 +39,7 @@ public:
      * @return Примерная длина в пикселях
      */
     int getLength() const {
-        return static_cast<int>(m_items.size()) * 20;
+        return static_cast<int>(m_items.size()) * 50;
     }
     
     /**

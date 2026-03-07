@@ -5,6 +5,7 @@
 #include <syngt/regex/REAnd.h>
 #include <syngt/regex/REOr.h>
 #include <syngt/regex/REIteration.h>
+#include <syngt/regex/RESemantic.h>
 #include <syngt/graphics/DrawObject.h>
 #include <syngt/graphics/Arrow.h>
 #include <syngt/graphics/Ward.h>
@@ -53,6 +54,27 @@ DrawObject* RETree::drawObjectsToRight(
     (void)ward;
     semantics = nullptr;
     height = 0;
+    return fromDO;
+}
+
+// RESemantic::drawObjectsToRight
+// Accumulates semantic ID into the shared list; does not create a DrawObject.
+// The next real element (terminal/non-terminal) will consume the list
+// and attach it as a SemanticArrow.
+DrawObject* RESemantic::drawObjectsToRight(
+    DrawObjectList* list,
+    SemanticIDList*& semantics,
+    DrawObject* fromDO,
+    int ward,
+    int& height
+) const {
+    (void)list;
+    (void)ward;
+    height = 0;
+    if (semantics == nullptr) {
+        semantics = new SemanticIDList();
+    }
+    semantics->add(m_id);
     return fromDO;
 }
 
@@ -186,12 +208,15 @@ DrawObject* REOr::drawObjectsToRight(
         }
     }
 
-    // Compute right edge across all branches
+    // Compute right edge across all branches, accounting for semantic arrow lengths
     int maxX = 0;
-    for (DrawObject* end : branchEnds) {
-        if (end->endX() > maxX) maxX = end->endX();
+    for (size_t i = 0; i < branchEnds.size(); i++) {
+        int arrLen = MinArrowLength;
+        if (branchSems[i]) arrLen += branchSems[i]->getLength();
+        if (i == 0 && ward == cwBACKWARD && branchEnds[i]->needSpike()) arrLen += SpikeLength;
+        int ex = branchEnds[i]->endX() + arrLen;
+        if (ex > maxX) maxX = ex;
     }
-    maxX += MinArrowLength;
 
     // Build join points bottom-to-top so each higher join gets secondInArrow
     // from the one below (the merge arrow that goes upward).
