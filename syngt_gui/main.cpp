@@ -31,6 +31,8 @@
 #include <syngt/utils/UndoRedo.h>
 #include <syngt/utils/Creator.h>
 #include <syngt/graphics/DrawObject.h>
+#include <syngt/regex/REBinaryOp.h>
+#include <syngt/regex/RENonTerminal.h>
 
 #include <fstream>
 #include <sstream>
@@ -134,10 +136,9 @@ static bool showRecursionWindow = false;
 static std::vector<syngt::RecursionResult> recursionResults;
 static bool showExtractRuleDialog = false;
 static char extractNewNTName[256] = "";
-static std::string s_extractCoverStr;
-static std::string s_extractOldStr;
-static size_t s_extractPos = 0;
+static std::string s_extractCoverStr;   // display: serialised cover
 static std::string s_extractActiveNT;
+static const syngt::RETree* s_extractCoverNode = nullptr; // pointer into active NT's tree
 
 // Editor state
 static int activeLeftTab = 1; // 0 = Grammar Editor, 1 = Syntax Diagram
@@ -2344,6 +2345,26 @@ static const syngt::RETree* FindSelectionCover(const syngt::RETree* node,
     return node;
 }
 
+// Replace the node pointed to by `target` inside `node`'s subtree with a new
+// RENonTerminal. Works by identity comparison (pointer), so handles duplicate
+// sub-expressions correctly. Returns true if the replacement was made.
+static bool ReplaceNodeInTree(syngt::RETree* node, const syngt::RETree* target,
+                               syngt::Grammar* g, int newNTId) {
+    if (!node) return false;
+    auto* bin = dynamic_cast<syngt::REBinaryOp*>(node);
+    if (!bin) return false;
+    if (bin->left() == target) {
+        bin->setFirst(std::make_unique<syngt::RENonTerminal>(g, newNTId, false));
+        return true;
+    }
+    if (bin->right() == target) {
+        bin->setSecond(std::make_unique<syngt::RENonTerminal>(g, newNTId, false));
+        return true;
+    }
+    return ReplaceNodeInTree(bin->left(),  target, g, newNTId) ||
+           ReplaceNodeInTree(bin->right(), target, g, newNTId);
+}
+
 static std::string GetFreeNonTerminalName() {
     int index = 1;
     while (true) {
@@ -2391,20 +2412,9 @@ void ExtractRule() {
     }
 
     auto emptyMask = syngt::EmptyMask();
-    std::string oldRuleStr = nt->root()->toString(emptyMask, false);
-    std::string newRuleStr = cover->toString(emptyMask, false);
-
-    size_t pos = oldRuleStr.find(newRuleStr);
-    if (pos == std::string::npos) {
-        ClearOutput();
-        AppendOutput("Error: selected subtree string not found in rule!\n");
-        return;
-    }
-
-    s_extractCoverStr = newRuleStr;
-    s_extractOldStr   = oldRuleStr;
-    s_extractPos      = pos;
-    s_extractActiveNT = activeNT;
+    s_extractCoverStr  = cover->toString(emptyMask, false);
+    s_extractActiveNT  = activeNT;
+    s_extractCoverNode = cover;
 
     std::string freeName = GetFreeNonTerminalName();
     strcpy_s(extractNewNTName, sizeof(extractNewNTName), freeName.c_str());
@@ -3855,14 +3865,28 @@ int main(int, char**)
                     AppendOutput(newName.c_str());
                     AppendOutput("' already exists!\n");
                 } else {
-                    std::string modifiedRule =
-                        s_extractOldStr.substr(0, s_extractPos) +
-                        newName +
-                        s_extractOldStr.substr(s_extractPos + s_extractCoverStr.length()) + ".";
-
-                    grammar->setNTRule(s_extractActiveNT, modifiedRule);
+                    // 1. Create new NT and assign extracted rule
                     grammar->addNonTerminal(newName);
                     grammar->setNTRule(newName, s_extractCoverStr + ".");
+
+                    // 2. Replace the selected subtree in the active NT's RE tree
+                    //    with a reference to the new NT (by pointer identity)
+                    int newNTId = grammar->findNonTerminal(newName);
+                    syngt::NTListItem* activeItem = grammar->getNTItem(s_extractActiveNT);
+                    bool replaceOk = false;
+                    if (activeItem && activeItem->root() && s_extractCoverNode) {
+                        replaceOk = ReplaceNodeInTree(activeItem->root(), s_extractCoverNode,
+                                                      grammar.get(), newNTId);
+                        if (replaceOk) {
+                            activeItem->updateValueFromRoot();
+                        }
+                    }
+                    if (!replaceOk) {
+                        ClearOutput();
+                        AppendOutput("Error: could not replace subtree!\n");
+                        s_extractCoverNode = nullptr;
+                        ImGui::CloseCurrentPopup();
+                    } else {
 
                     // Update grammarText
                     std::string tempFile = "temp_result.grm";
@@ -3882,6 +3906,8 @@ int main(int, char**)
                         }
                     }
 
+                    s_extractCoverNode = nullptr;
+
                     ClearDiagramLayouts();
                     UpdateDiagram();
                     LoadRuleToEditor();
@@ -3893,10 +3919,12 @@ int main(int, char**)
                     AppendOutput("'!\n");
 
                     ImGui::CloseCurrentPopup();
+                    } // else replaceOk
                 }
             }
             ImGui::SameLine();
             if (ImGui::Button("Cancel")) {
+                s_extractCoverNode = nullptr;
                 ImGui::CloseCurrentPopup();
             }
             ImGui::EndPopup();
