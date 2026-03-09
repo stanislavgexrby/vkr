@@ -36,12 +36,12 @@ std::string RETerminal::toString(const SelectionMask& mask, bool reverse) const 
     (void)mask;
     (void)reverse;
 
-    // id==0 is always epsilon regardless of what getString() returns
-    if (m_id == 0) {
-        return "@";
+    // Use getRawString() so that the epsilon terminal (stored as "") is correctly
+    // identified by its empty raw value, not by getString() which maps it to "@".
+    std::string name;
+    if (m_grammar) {
+        name = m_grammar->terminals()->getRawString(m_id);
     }
-
-    std::string name = getNameFromID();
 
     if (name.empty()) {
         return "@";

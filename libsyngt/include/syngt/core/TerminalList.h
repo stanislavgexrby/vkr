@@ -18,6 +18,15 @@ public:
     int find(const std::string& s) const;
     
     std::string getString(int index) const;
+
+    // Returns the actual stored string without any display substitution.
+    // For the epsilon terminal (stored as "") this returns "" rather than "@".
+    std::string getRawString(int index) const {
+        if (index < 0 || index >= static_cast<int>(m_items.size())) {
+            return "";
+        }
+        return m_items[index];
+    }
     
     int getCount() const { return static_cast<int>(m_items.size()); }
     

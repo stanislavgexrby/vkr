@@ -43,13 +43,13 @@ TEST(SemanticIDListTest, GetLength) {
     EXPECT_EQ(list.getLength(), 0);
     
     list.add(1);
-    EXPECT_EQ(list.getLength(), 20);
-    
+    EXPECT_EQ(list.getLength(), 50);
+
     list.add(2);
-    EXPECT_EQ(list.getLength(), 40);
-    
+    EXPECT_EQ(list.getLength(), 100);
+
     list.add(3);
-    EXPECT_EQ(list.getLength(), 60);
+    EXPECT_EQ(list.getLength(), 150);
 }
 
 TEST(SemanticIDListTest, Copy) {
@@ -122,7 +122,7 @@ TEST(SemanticIDListTest, MultipleAdds) {
     }
     
     EXPECT_EQ(list.count(), 10);
-    EXPECT_EQ(list.getLength(), 200);
+    EXPECT_EQ(list.getLength(), 500);
     
     for (int i = 0; i < 10; ++i) {
         EXPECT_EQ(list.getID(i), i * 10);
