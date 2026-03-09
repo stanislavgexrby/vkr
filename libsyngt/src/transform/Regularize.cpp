@@ -60,9 +60,15 @@ static std::unique_ptr<RETree> createOr(std::unique_ptr<RETree> a, std::unique_p
     return REOr::make(std::move(a), std::move(b));
 }
 
-// nil , X = nil,  X , nil = nil
-static std::unique_ptr<RETree> createAnd(std::unique_ptr<RETree> a, std::unique_ptr<RETree> b) {
+// nil , X = nil,  X , nil = nil,  ε , X = X,  X , ε = X
+static std::unique_ptr<RETree> createAnd(std::unique_ptr<RETree> a,
+                                         std::unique_ptr<RETree> b,
+                                         Grammar* grammar = nullptr) {
     if (!a || !b) return nullptr;
+    if (grammar) {
+        if (isEpsilonNode(a.get(), grammar)) return b;
+        if (isEpsilonNode(b.get(), grammar)) return a;
+    }
     return REAnd::make(std::move(a), std::move(b));
 }
 
@@ -149,16 +155,16 @@ static LeftTransformation computeLeftEl(const RETree* node,
         if (!LTr.E) {
             // L cannot produce epsilon: left recursion only through L's left edge
             return {
-                createAnd(std::move(LTr.R1), R->copy()),
-                createAnd(std::move(LTr.R2), R->copy()),
+                createAnd(std::move(LTr.R1), R->copy(), grammar),
+                createAnd(std::move(LTr.R2), R->copy(), grammar),
                 false
             };
         } else {
             // L can produce epsilon: also check right operand
             auto RTr = computeLeftEl(R, nt, grammar);
             return {
-                createOr(createAnd(std::move(LTr.R1), R->copy()), std::move(RTr.R1)),
-                createOr(createAnd(std::move(LTr.R2), R->copy()), std::move(RTr.R2)),
+                createOr(createAnd(std::move(LTr.R1), R->copy(), grammar), std::move(RTr.R1)),
+                createOr(createAnd(std::move(LTr.R2), R->copy(), grammar), std::move(RTr.R2)),
                 RTr.E
             };
         }
@@ -174,8 +180,8 @@ static LeftTransformation computeLeftEl(const RETree* node,
             // Unary star: ε*R = R*
             auto RTr = computeLeftEl(R, nt, grammar);
             return {
-                createAnd(std::move(RTr.R1), node->copy()),
-                createAnd(std::move(RTr.R2), node->copy()),
+                createAnd(std::move(RTr.R1), node->copy(), grammar),
+                createAnd(std::move(RTr.R2), node->copy(), grammar),
                 true
             };
         } else {
@@ -250,15 +256,15 @@ static RightTransformation computeRightEl(const RETree* node,
 
         if (!RTr.E) {
             return {
-                createAnd(L->copy(), std::move(RTr.RA)),
-                createAnd(L->copy(), std::move(RTr.RB)),
+                createAnd(L->copy(), std::move(RTr.RA), grammar),
+                createAnd(L->copy(), std::move(RTr.RB), grammar),
                 false
             };
         } else {
             auto LTr = computeRightEl(L, nt, grammar);
             return {
-                createOr(createAnd(L->copy(), std::move(RTr.RA)), std::move(LTr.RA)),
-                createOr(createAnd(L->copy(), std::move(RTr.RB)), std::move(LTr.RB)),
+                createOr(createAnd(L->copy(), std::move(RTr.RA), grammar), std::move(LTr.RA)),
+                createOr(createAnd(L->copy(), std::move(RTr.RB), grammar), std::move(LTr.RB)),
                 LTr.E
             };
         }
@@ -273,8 +279,8 @@ static RightTransformation computeRightEl(const RETree* node,
         if (isEpsilonNode(L, grammar)) {
             auto RTr = computeRightEl(R, nt, grammar);
             return {
-                createAnd(node->copy(), std::move(RTr.RA)),
-                createAnd(node->copy(), std::move(RTr.RB)),
+                createAnd(node->copy(), std::move(RTr.RA), grammar),
+                createAnd(node->copy(), std::move(RTr.RB), grammar),
                 true
             };
         } else {
@@ -332,9 +338,11 @@ void Regularize::regularize(Grammar* grammar) {
         auto core = createAnd(
             createAnd(
                 createUnaryIteration(std::move(RightT_R2.RA), grammar),  // (RA2)*
-                std::move(RightT_R2.RB)                                   // · RB2
+                std::move(RightT_R2.RB),                                  // · RB2
+                grammar
             ),
-            createUnaryIteration(std::move(RightT_R1.RB), grammar)        // · (RB1)*
+            createUnaryIteration(std::move(RightT_R1.RB), grammar),       // · (RB1)*
+            grammar
         );
 
         if (tr.E && core)
