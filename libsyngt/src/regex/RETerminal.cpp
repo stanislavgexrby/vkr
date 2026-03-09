@@ -35,9 +35,14 @@ std::unique_ptr<RETree> RETerminal::copy() const {
 std::string RETerminal::toString(const SelectionMask& mask, bool reverse) const {
     (void)mask;
     (void)reverse;
-    
+
+    // id==0 is always epsilon regardless of what getString() returns
+    if (m_id == 0) {
+        return "@";
+    }
+
     std::string name = getNameFromID();
-    
+
     if (name.empty()) {
         return "@";
     }

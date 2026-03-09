@@ -823,8 +823,14 @@ static std::string buildRestoredText(const std::vector<std::string>& names,
                                      const std::vector<bool>& macroFlags) {
     std::string text;
     for (size_t i = 0; i < names.size() && i < values.size(); ++i) {
+        // Skip NTs that have no real rule (value == "eps" means no root).
+        // Writing "ntName : eps." would cause the parser to add a spurious
+        // non-terminal named "eps", shifting all indices.
+        if (values[i] == "eps" || values[i].empty()) {
+            continue;
+        }
         text += names[i] + " : " + values[i];
-        if (!values[i].empty() && values[i].back() != '.') {
+        if (values[i].back() != '.') {
             text += ".";
         }
         text += "\n";
@@ -2012,7 +2018,21 @@ void ParseGrammar(bool clearLayouts = true) {
                  grammar->semantics()->getCount(),
                  macroCount);
         AppendOutput(stats);
-        
+
+        // Set activeNTIndex to the first NT that actually has a rule,
+        // skipping the dummy "S" that fillNew() inserts at index 0.
+        {
+            auto nts = grammar->getNonTerminals();
+            activeNTIndex = 0;
+            for (int i = 0; i < static_cast<int>(nts.size()); ++i) {
+                auto* ntItem = grammar->getNTItem(nts[i]);
+                if (ntItem && ntItem->hasRoot()) {
+                    activeNTIndex = i;
+                    break;
+                }
+            }
+        }
+
         SaveCurrentState();
 
         UpdateDiagram();
@@ -2374,6 +2394,44 @@ static std::string GetFreeNonTerminalName() {
     }
 }
 
+// Recursively copy a RE tree, inlining any RENonTerminal whose drawObj() is
+// in the selection mask with the body of that NT.
+static std::unique_ptr<syngt::RETree> SubstituteInTree(
+    const syngt::RETree* node,
+    const syngt::SelectionMask& sm)
+{
+    if (!node) return nullptr;
+
+    // RENonTerminal: inline if selected
+    if (auto* nt = dynamic_cast<const syngt::RENonTerminal*>(node)) {
+        if (nt->drawObj() >= 0) {
+            for (int id : sm) {
+                if (id == nt->drawObj()) {
+                    syngt::NTListItem* item = grammar->getNTItem(nt->nameID());
+                    if (item && item->hasRoot()) return item->root()->copy();
+                    break;
+                }
+            }
+        }
+        return node->copy();
+    }
+
+    // Binary ops: copy the node, then replace children with substituted versions.
+    // copy() does a deep copy; we overwrite children immediately after.
+    if (dynamic_cast<const syngt::REBinaryOp*>(node)) {
+        auto nodeCopy = node->copy();
+        auto* bin = dynamic_cast<syngt::REBinaryOp*>(nodeCopy.get());
+        if (bin) {
+            bin->setFirst(SubstituteInTree(node->left(), sm));
+            bin->setSecond(SubstituteInTree(node->right(), sm));
+        }
+        return nodeCopy;
+    }
+
+    // Leaves (Terminal, Semantic): copy as-is
+    return node->copy();
+}
+
 void ExtractRule() {
     if (!grammar || !drawObjects) {
         ClearOutput();
@@ -2447,8 +2505,14 @@ void Substitute() {
         return;
     }
 
-    std::string newRuleStr = nt->root()->toString(sm, false) + ".";
-    grammar->setNTRule(activeNT, newRuleStr);
+    // Build a new RE tree with selected NT boxes replaced by their bodies
+    auto newRoot = SubstituteInTree(nt->root(), sm);
+    if (!newRoot) {
+        ClearOutput();
+        AppendOutput("Substitution produced empty rule!\n");
+        return;
+    }
+    nt->setRoot(std::move(newRoot)); // also updates m_value via setValueFromRoot
 
     // Update grammarText
     std::string tempFile = "temp_result.grm";
@@ -3662,7 +3726,9 @@ int main(int, char**)
         ImGui::BeginChild("Output", ImVec2(0, 0), true);
         ImGui::Text("Output:");
         ImGui::Separator();
-        ImGui::TextWrapped("%s", outputText);
+        ImGui::InputTextMultiline("##output", outputText, sizeof(outputText),
+                                   ImVec2(-FLT_MIN, -FLT_MIN),
+                                   ImGuiInputTextFlags_ReadOnly);
         ImGui::EndChild();
         
         ImGui::EndChild();
