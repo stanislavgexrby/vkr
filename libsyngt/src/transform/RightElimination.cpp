@@ -42,7 +42,7 @@ static bool isEpsilonNode(const RETree* node, Grammar* grammar) {
 }
 
 static std::unique_ptr<RETree> makeEpsilon(Grammar* grammar) {
-    return std::make_unique<RESemantic>(grammar, grammar->addSemantic("@"));
+    return std::make_unique<RETerminal>(grammar, 0);
 }
 
 // nullptr | X = X,  X | nullptr = X,  X | Y = REOr(X,Y)
@@ -139,19 +139,28 @@ static RightTransformation computeRightEl(const RETree* node,
 
         auto RTr = computeRightEl(R, nt, grammar);
 
+        // Helper: L · x, eliminating epsilon on either side
+        auto andEps = [&](std::unique_ptr<RETree> x) -> std::unique_ptr<RETree> {
+            if (!x) return nullptr;
+            if (isEpsilonNode(x.get(), grammar)) return L->copy();
+            if (isEpsilonNode(L, grammar))        return x;
+            return REAnd::make(L->copy(), std::move(x));
+        };
+
         if (!RTr.E) {
-            // R cannot produce epsilon: L·R = L·RTr.RA·A | L·RTr.RB
+            // R cannot produce epsilon: L·R ends with A via L·RTr.RA·A
+            // RA(L·R) = L · RTr.RA
             return {
-                createAnd(L->copy(), std::move(RTr.RA)),
-                createAnd(L->copy(), std::move(RTr.RB)),
+                andEps(std::move(RTr.RA)),
+                andEps(std::move(RTr.RB)),
                 false
             };
         } else {
-            // R can produce epsilon: also consider right-recursion from L itself
+            // R can produce epsilon: right-recursion may also come from L
             auto LTr = computeRightEl(L, nt, grammar);
             return {
-                createOr(createAnd(L->copy(), std::move(RTr.RA)), std::move(LTr.RA)),
-                createOr(createAnd(L->copy(), std::move(RTr.RB)), std::move(LTr.RB)),
+                createOr(andEps(std::move(RTr.RA)), std::move(LTr.RA)),
+                createOr(andEps(std::move(RTr.RB)), std::move(LTr.RB)),
                 LTr.E
             };
         }
@@ -210,9 +219,9 @@ void RightElimination::eliminateForNonTerminal(NTListItem* nt, Grammar* grammar)
     const bool raWasNonNull = (tr.RA != nullptr);
     const bool rbWasNonNull = (tr.RB != nullptr);
 
-    // Build: RB , RA*
+    // Build: RA* , RB  (A → α A | β  ⟹  A = α* β)
     auto raIter  = createUnaryIteration(std::move(tr.RA), grammar);
-    auto newRoot = createAndAlt(std::move(tr.RB), std::move(raIter));
+    auto newRoot = createAndAlt(std::move(raIter), std::move(tr.RB));
 
     // If original could produce epsilon but both parts were present, add explicit ε
     if (tr.E && raWasNonNull && rbWasNonNull) {

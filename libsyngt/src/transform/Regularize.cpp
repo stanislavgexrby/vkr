@@ -50,7 +50,7 @@ static bool isEpsilonNode(const RETree* node, Grammar* grammar) {
 }
 
 static std::unique_ptr<RETree> makeEpsilon(Grammar* grammar) {
-    return std::make_unique<RESemantic>(grammar, grammar->addSemantic("@"));
+    return std::make_unique<RETerminal>(grammar, 0);
 }
 
 // nil | X = X,  X | nil = X

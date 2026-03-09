@@ -3071,14 +3071,11 @@ int main(int, char**)
                 ImGui::Separator();
                 if (ImGui::MenuItem("Extract Rule")) ExtractRule();
                 if (ImGui::MenuItem("Substitute")) Substitute();
-                if (ImGui::MenuItem("Left Factorization")) LeftFactorize();
                 if (ImGui::MenuItem("Remove Useless")) RemoveUselessSymbols();
                 ImGui::Separator();
                 if (ImGui::MenuItem("Toggle Macro")) ToggleMacro();
                 if (ImGui::MenuItem("Open All Macros")) OpenAllMacros();
                 if (ImGui::MenuItem("Close All Definitions")) CloseAllDefinitions();
-                ImGui::Separator();
-                if (ImGui::MenuItem("Check LL(1)")) CheckLL1();
                 ImGui::EndMenu();
             }
             if (ImGui::BeginMenu("Help")) {
@@ -3679,14 +3676,8 @@ int main(int, char**)
         if (ImGui::Button("Substitute", ImVec2(-FLT_MIN, 0))) {
             Substitute();
         }
-        if (ImGui::Button("Left Factorization", ImVec2(-FLT_MIN, 0))) {
-            LeftFactorize();
-        }
         if (ImGui::Button("Remove Useless", ImVec2(-FLT_MIN, 0))) {
             RemoveUselessSymbols();
-        }
-        if (ImGui::Button("Check LL(1)", ImVec2(-FLT_MIN, 0))) {
-            CheckLL1();
         }
         ImGui::Separator();
         ImGui::Text("Macros");
@@ -3871,59 +3862,102 @@ int main(int, char**)
         // Recursion Analysis window
         if (showRecursionWindow) {
             ImGui::OpenPopup("Recursion Analysis");
-            if (ImGui::BeginPopupModal("Recursion Analysis", &showRecursionWindow,
-                                       ImGuiWindowFlags_AlwaysAutoResize)) {
-                bool needRefresh = false;
-                if (ImGui::BeginTable("RecTable", 5,
-                                      ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
-                    ImGui::TableSetupColumn("Nonterminal");
-                    ImGui::TableSetupColumn("Left Recursion");
-                    ImGui::TableSetupColumn("Recursion");
-                    ImGui::TableSetupColumn("Right Recursion");
-                    ImGui::TableSetupColumn("Actions");
-                    ImGui::TableHeadersRow();
-                    for (const auto& r : recursionResults) {
-                        ImGui::TableNextRow();
-                        ImGui::TableSetColumnIndex(0); ImGui::TextUnformatted(r.name.c_str());
-                        ImGui::TableSetColumnIndex(1); ImGui::TextUnformatted(r.leftRecursion.c_str());
-                        ImGui::TableSetColumnIndex(2); ImGui::TextUnformatted(r.anyRecursion.c_str());
-                        ImGui::TableSetColumnIndex(3); ImGui::TextUnformatted(r.rightRecursion.c_str());
-                        ImGui::TableSetColumnIndex(4);
-                        if (r.leftRecursion == "direct") {
-                            if (ImGui::SmallButton(("Elim L##" + r.name).c_str())) {
-                                syngt::NTListItem* nt = grammar->getNTItem(r.name);
-                                if (nt) {
-                                    syngt::LeftElimination::eliminateForNonTerminal(nt, grammar.get());
-                                    UpdateGrammarText();
-                                    SaveCurrentState();
-                                    needRefresh = true;
-                                }
+            showRecursionWindow = false;
+        }
+        bool recursionWindowOpen = true;
+        if (ImGui::BeginPopupModal("Recursion Analysis", &recursionWindowOpen,
+                                   ImGuiWindowFlags_AlwaysAutoResize)) {
+            bool needRefresh = false;
+
+            auto colorForType = [](const std::string& t) -> ImVec4 {
+                if (t == "direct")   return ImVec4(0.85f, 0.2f, 0.2f, 1.f);
+                if (t == "indirect") return ImVec4(0.85f, 0.6f, 0.1f, 1.f);
+                return ImVec4(0.4f, 0.7f, 0.4f, 1.f); // none — green
+            };
+
+            if (ImGui::BeginTable("RecTable", 5,
+                                  ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
+                                  ImGuiTableFlags_SizingFixedFit)) {
+                ImGui::TableSetupColumn("Nonterminal", ImGuiTableColumnFlags_WidthStretch);
+                ImGui::TableSetupColumn("Left rec.");
+                ImGui::TableSetupColumn("General rec.");
+                ImGui::TableSetupColumn("Right rec.");
+                ImGui::TableSetupColumn("Actions");
+                ImGui::TableHeadersRow();
+
+                for (const auto& r : recursionResults) {
+                    ImGui::TableNextRow();
+
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::TextUnformatted(r.name.c_str());
+
+                    auto showCell = [&](const std::string& val) {
+                        std::string label = val.empty() ? "none" : val;
+                        ImGui::TextColored(colorForType(val), "%s", label.c_str());
+                    };
+
+                    ImGui::TableSetColumnIndex(1); showCell(r.leftRecursion);
+                    ImGui::TableSetColumnIndex(2); showCell(r.anyRecursion);
+                    ImGui::TableSetColumnIndex(3); showCell(r.rightRecursion);
+
+                    ImGui::TableSetColumnIndex(4);
+                    bool hasAction = false;
+
+                    // Elim L — only meaningful for direct left recursion
+                    if (r.leftRecursion == "direct") {
+                        if (ImGui::SmallButton(("Elim L##" + r.name).c_str())) {
+                            syngt::NTListItem* nt = grammar->getNTItem(r.name);
+                            if (nt) {
+                                syngt::LeftElimination::eliminateForNonTerminal(nt, grammar.get());
+                                UpdateGrammarText();
+                                ClearDiagramLayouts();
+                                UpdateDiagram();
+                                SaveCurrentState();
+                                needRefresh = true;
                             }
-                            ImGui::SameLine();
                         }
-                        if (r.rightRecursion == "direct") {
-                            if (ImGui::SmallButton(("Elim R##" + r.name).c_str())) {
-                                syngt::NTListItem* nt = grammar->getNTItem(r.name);
-                                if (nt) {
-                                    syngt::RightElimination::eliminateForNonTerminal(nt, grammar.get());
-                                    UpdateGrammarText();
-                                    SaveCurrentState();
-                                    needRefresh = true;
-                                }
+                        hasAction = true;
+                    }
+
+                    // Elim R — only meaningful for direct right recursion
+                    if (r.rightRecursion == "direct") {
+                        if (hasAction) ImGui::SameLine();
+                        if (ImGui::SmallButton(("Elim R##" + r.name).c_str())) {
+                            syngt::NTListItem* nt = grammar->getNTItem(r.name);
+                            if (nt) {
+                                syngt::RightElimination::eliminateForNonTerminal(nt, grammar.get());
+                                UpdateGrammarText();
+                                ClearDiagramLayouts();
+                                UpdateDiagram();
+                                SaveCurrentState();
+                                needRefresh = true;
                             }
                         }
                     }
-                    ImGui::EndTable();
+
+                    if (r.leftRecursion.empty() && r.rightRecursion.empty()) {
+                        ImGui::TextDisabled("-");
+                    }
                 }
-                if (needRefresh) {
-                    RefreshRecursionResults();
-                }
-                ImGui::Separator();
-                if (ImGui::Button("Refresh")) RefreshRecursionResults();
-                ImGui::SameLine();
-                if (ImGui::Button("Close")) showRecursionWindow = false;
-                ImGui::EndPopup();
+                ImGui::EndTable();
             }
+
+            if (needRefresh) {
+                RefreshRecursionResults();
+            }
+
+            ImGui::Separator();
+            ImGui::TextDisabled("Tip: use Eliminate Left/Right Recursion for indirect recursion.");
+            ImGui::Separator();
+            if (ImGui::Button("Refresh")) RefreshRecursionResults();
+            ImGui::SameLine();
+            if (ImGui::Button("Elim All Left"))  { EliminateLeftRecursion();  RefreshRecursionResults(); }
+            ImGui::SameLine();
+            if (ImGui::Button("Elim All Right")) { EliminateRightRecursion(); RefreshRecursionResults(); }
+            ImGui::SameLine();
+            if (ImGui::Button("Close")) ImGui::CloseCurrentPopup();
+
+            ImGui::EndPopup();
         }
 
         // Extract Rule dialog
