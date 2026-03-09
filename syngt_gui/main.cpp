@@ -3099,36 +3099,52 @@ int main(int, char**)
 
         // Hot keys
         ImGuiIO& io = ImGui::GetIO();
-        
-        // Delete
-        if (ImGui::IsKeyPressed(ImGuiKey_Delete) && drawObjects) {
-            int selectedCount = 0;
-            for (int i = 0; i < drawObjects->count(); ++i) {
-                if ((*drawObjects)[i]->selected()) {
-                    selectedCount++;
+
+        // Shortcuts that must not fire while typing in a text field
+        if (!io.WantTextInput) {
+            // Ctrl+Z - Undo
+            if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Z, false)) {
+                Undo();
+            }
+            // Ctrl+Y - Redo
+            if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Y, false)) {
+                Redo();
+            }
+            // Ctrl+S - Save
+            if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_S, false)) {
+                SaveFile();
+            }
+            // Ctrl+O - Open
+            if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_O, false)) {
+                LoadFile();
+            }
+            // Ctrl+N - New
+            if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_N, false)) {
+                NewFile();
+            }
+            // F5 - Parse
+            if (ImGui::IsKeyPressed(ImGuiKey_F5, false)) {
+                ParseGrammar();
+            }
+            // Ctrl+A - Select all diagram objects
+            if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_A, false) && drawObjects) {
+                drawObjects->unselectAll();
+                for (int i = 0; i < drawObjects->count(); ++i) {
+                    drawObjects->changeSelection((*drawObjects)[i]);
                 }
             }
-            if (selectedCount > 0) {
-                DeleteSelectedObjects();
+            // Delete - remove selected diagram objects
+            if (ImGui::IsKeyPressed(ImGuiKey_Delete, false) && drawObjects) {
+                int selectedCount = 0;
+                for (int i = 0; i < drawObjects->count(); ++i) {
+                    if ((*drawObjects)[i]->selected()) selectedCount++;
+                }
+                if (selectedCount > 0) DeleteSelectedObjects();
             }
-        }
-        
-        // Ctrl+N
-        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_N)) {
-            NewFile();
-        }
-
-        // Ctrl+A
-        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_A) && drawObjects) {
-            drawObjects->unselectAll();
-            for (int i = 0; i < drawObjects->count(); ++i) {
-                drawObjects->changeSelection((*drawObjects)[i]);
+            // Escape - deselect
+            if (ImGui::IsKeyPressed(ImGuiKey_Escape, false) && drawObjects) {
+                drawObjects->unselectAll();
             }
-        }
-        
-        // Escape
-        if (ImGui::IsKeyPressed(ImGuiKey_Escape) && drawObjects) {
-            drawObjects->unselectAll();
         }
 
         ImGui::SetNextWindowPos(ImVec2(0, ImGui::GetFrameHeight()));
@@ -3289,11 +3305,12 @@ int main(int, char**)
                         
                         ImVec2 mousePos = ImGui::GetMousePos();
                         
-                        // Ctrl+scroll to zoom
-                        if (isHovered && ImGui::GetIO().KeyCtrl && ImGui::GetIO().MouseWheel != 0.0f) {
-                            float delta = ImGui::GetIO().MouseWheel * 0.1f;
+                        // Ctrl+scroll to zoom (check whole canvas child window, not just InvisibleButton)
+                        bool canvasWindowHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows |
+                                                                           ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
+                        if (canvasWindowHovered && io.KeyCtrl && io.MouseWheel != 0.0f) {
+                            float delta = io.MouseWheel * 0.1f;
                             diagramScale = std::max(0.25f, std::min(4.0f, diagramScale + delta));
-                            ImGui::GetIO().MouseWheel = 0.0f;  // consume event to prevent scrolling
                         }
 
                         // Hovering
@@ -4025,10 +4042,16 @@ int main(int, char**)
                 ImGui::BulletText("EOGram! - end of grammar marker");
                 ImGui::Separator();
                 ImGui::Text("Keyboard Shortcuts:");
+                ImGui::BulletText("Ctrl+Z - Undo");
+                ImGui::BulletText("Ctrl+Y - Redo");
                 ImGui::BulletText("Ctrl+N - New grammar");
                 ImGui::BulletText("Ctrl+O - Open file");
                 ImGui::BulletText("Ctrl+S - Save file");
-                ImGui::BulletText("F5 - Parse grammar");
+                ImGui::BulletText("F5    - Parse grammar");
+                ImGui::BulletText("Ctrl+A - Select all (diagram)");
+                ImGui::BulletText("Delete - Delete selected (diagram)");
+                ImGui::BulletText("Escape - Deselect all");
+                ImGui::BulletText("Ctrl+Scroll - Zoom diagram");
                 ImGui::Separator();
                 if (ImGui::Button("Close")) showHelp = false;
                 ImGui::EndPopup();
