@@ -9,7 +9,8 @@ using SelectionMask = std::vector<int>;
 enum MarkType {
     cmNotMarked = 0,
     cmMarked = 1,
-    cmOpenMacro = 2
+    cmOpenMacro = 2,
+    cmInProgress = 3
 };
 
 constexpr int cgTerminalList = 0;

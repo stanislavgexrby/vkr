@@ -166,7 +166,7 @@ public:
      * @brief Раскрыть все ссылки на макросы в правиле нетерминала
      * Устанавливает m_isOpen=true на RENonTerminal-узлах, ссылающихся на NT с isMacro()
      */
-    void openMacroRefs(const std::string& ntName);
+    void openMacroRefs(const std::string& ntName, bool defaultOpen = true);
 
     /**
      * @brief Закрыть все ссылки на нетерминалы в правиле

@@ -13,7 +13,7 @@ class NTListItem;
  */
 class REMacro : public RELeaf {
 protected:
-    bool m_isOpen = false;
+    mutable bool m_isOpen = false;
     
     /**
      * @brief Получить корень дерева (если макрос раскрыт)

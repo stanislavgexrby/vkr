@@ -32,7 +32,9 @@
 #include <syngt/utils/Creator.h>
 #include <syngt/graphics/DrawObject.h>
 #include <syngt/regex/REBinaryOp.h>
+#include <syngt/regex/RETerminal.h>
 #include <syngt/regex/RENonTerminal.h>
+#include <syngt/regex/RESemantic.h>
 
 #include <fstream>
 #include <sstream>
@@ -139,6 +141,7 @@ static char extractNewNTName[256] = "";
 static std::string s_extractCoverStr;   // display: serialised cover
 static std::string s_extractActiveNT;
 static const syngt::RETree* s_extractCoverNode = nullptr; // pointer into active NT's tree
+static bool showSemanticsWindow = false;
 
 // Editor state
 static int activeLeftTab = 1; // 0 = Grammar Editor, 1 = Syntax Diagram
@@ -161,6 +164,7 @@ static bool showAddReferenceDialog = false;
 static bool showEditDialog = false;
 static char newSymbolName[256] = "";
 static bool useOrOperator = false;
+static bool g_macroOpenedDefault = false;
 
 // Layout sizes
 static float leftWidth = 800.0f;
@@ -378,11 +382,39 @@ void DrawArrowhead(ImDrawList* drawList, ImVec2 from, ImVec2 to, ImU32 color, fl
     drawList->AddTriangleFilled(tip, left, right, color);
 }
 
+void DrawDashedRect(ImDrawList* drawList, ImVec2 tl, ImVec2 br, ImU32 color, float thickness, float dashLen = 6.0f, float gapLen = 4.0f) {
+    // Draw each side as dashes
+    auto drawDashedLine = [&](ImVec2 a, ImVec2 b) {
+        float dx = b.x - a.x, dy = b.y - a.y;
+        float len = sqrtf(dx*dx + dy*dy);
+        if (len < 0.001f) return;
+        float nx = dx / len, ny = dy / len;
+        float pos = 0.0f;
+        bool drawing = true;
+        while (pos < len) {
+            float segEnd = pos + (drawing ? dashLen : gapLen);
+            if (segEnd > len) segEnd = len;
+            if (drawing) {
+                drawList->AddLine(
+                    ImVec2(a.x + nx * pos, a.y + ny * pos),
+                    ImVec2(a.x + nx * segEnd, a.y + ny * segEnd),
+                    color, thickness);
+            }
+            pos = segEnd;
+            drawing = !drawing;
+        }
+    };
+    drawDashedLine(ImVec2(tl.x, tl.y), ImVec2(br.x, tl.y)); // top
+    drawDashedLine(ImVec2(br.x, tl.y), ImVec2(br.x, br.y)); // right
+    drawDashedLine(ImVec2(br.x, br.y), ImVec2(tl.x, br.y)); // bottom
+    drawDashedLine(ImVec2(tl.x, br.y), ImVec2(tl.x, tl.y)); // left
+}
+
 void RenderDiagram(ImDrawList* drawList, const ImVec2& offset, float scale) {
     if (!drawObjects || drawObjects->count() == 0) return;
 
     const ImU32 lineColor = IM_COL32(0, 0, 0, 255);
-    const ImU32 selectedColor = IM_COL32(25, 55, 95, 255);
+    const ImU32 selectedColor = IM_COL32(200, 30, 30, 255);
     const ImU32 hoveredColor = IM_COL32(100, 150, 255, 255);
     const ImU32 textColor = IM_COL32(80, 80, 80, 255);
     
@@ -564,20 +596,23 @@ void RenderDiagram(ImDrawList* drawList, const ImVec2& offset, float scale) {
             float h = 40.0f * scale;
             drawList->AddRect(ImVec2(x, y - h/2), ImVec2(x + w, y + h/2), currentColor, 0.0f, 0, thickness);
 
-            // Double border for macro NTs
             auto leaf = dynamic_cast<syngt::graphics::DrawObjectLeaf*>(obj);
-            if (leaf && grammar) {
-                syngt::NTListItem* ntItem = grammar->getNTItem(leaf->name());
-                if (ntItem && ntItem->isMacro()) {
-                    float gap = 3.0f * scale;
-                    drawList->AddRect(
-                        ImVec2(x + gap, y - h/2 + gap),
-                        ImVec2(x + w - gap, y + h/2 - gap),
-                        currentColor, 0.0f, 0, thickness
-                    );
-                }
+            if (leaf) {
+                std::string name = leaf->name();
+                float fontSize = ImGui::GetFontSize() * scale;
+                ImVec2 textSize = ImGui::CalcTextSize(name.c_str());
+                textSize.x *= scale;
+                textSize.y *= scale;
+                drawList->AddText(ImGui::GetFont(), fontSize,
+                    ImVec2(x + w/2 - textSize.x/2, y - textSize.y/2), textColor, name.c_str());
             }
+        }
+        else if (type == syngt::graphics::ctDrawObjectMacro) {
+            float w = obj->getLength() * scale;
+            float h = 40.0f * scale;
+            DrawDashedRect(drawList, ImVec2(x, y - h/2), ImVec2(x + w, y + h/2), currentColor, thickness, 6.0f * scale, 4.0f * scale);
 
+            auto leaf = dynamic_cast<syngt::graphics::DrawObjectLeaf*>(obj);
             if (leaf) {
                 std::string name = leaf->name();
                 float fontSize = ImGui::GetFontSize() * scale;
@@ -823,10 +858,9 @@ static std::string buildRestoredText(const std::vector<std::string>& names,
                                      const std::vector<bool>& macroFlags) {
     std::string text;
     for (size_t i = 0; i < names.size() && i < values.size(); ++i) {
-        // Skip NTs that have no real rule (value == "eps" means no root).
-        // Writing "ntName : eps." would cause the parser to add a spurious
-        // non-terminal named "eps", shifting all indices.
-        if (values[i] == "eps" || values[i].empty()) {
+        if (values[i].empty()) {
+            // NT with no rule text — write as epsilon
+            text += names[i] + " : eps.\n";
             continue;
         }
         text += names[i] + " : " + values[i];
@@ -2019,21 +2053,20 @@ void ParseGrammar(bool clearLayouts = true) {
                  macroCount);
         AppendOutput(stats);
 
-        // Set activeNTIndex to the first NT that actually has a rule,
-        // skipping the dummy "S" that fillNew() inserts at index 0.
+        // Keep activeNTIndex at 0 (or clamp to valid range); eps rules are
+        // now drawn as Start→End, so no need to skip them.
         {
             auto nts = grammar->getNonTerminals();
-            activeNTIndex = 0;
-            for (int i = 0; i < static_cast<int>(nts.size()); ++i) {
-                auto* ntItem = grammar->getNTItem(nts[i]);
-                if (ntItem && ntItem->hasRoot()) {
-                    activeNTIndex = i;
-                    break;
-                }
-            }
+            if (activeNTIndex < 0 || activeNTIndex >= static_cast<int>(nts.size()))
+                activeNTIndex = 0;
         }
 
         SaveCurrentState();
+
+        if (g_macroOpenedDefault) {
+            for (const auto& nt : grammar->getNonTerminals())
+                grammar->openMacroRefs(nt, true);
+        }
 
         UpdateDiagram();
         RefreshRecursionResults();
@@ -2385,6 +2418,49 @@ static bool ReplaceNodeInTree(syngt::RETree* node, const syngt::RETree* target,
            ReplaceNodeInTree(bin->right(), target, g, newNTId);
 }
 
+// Expand the initial selection cover to absorb any adjacent RESemantic nodes
+// in AND chains.  Example: AND(AND(A, $s), B) with cover=A  →  AND(A, $s).
+// Returns {expanded_cover, found_in_subtree}.
+static std::pair<const syngt::RETree*, bool> ExpandSemanticsCover(
+    const syngt::RETree* node, const syngt::RETree* cover)
+{
+    if (!node) return {nullptr, false};
+    if (node == cover) return {cover, true};
+
+    const auto* bin = dynamic_cast<const syngt::REBinaryOp*>(node);
+    if (!bin) return {nullptr, false};
+
+    const syngt::RETree* left  = bin->left();
+    const syngt::RETree* right = bin->right();
+
+    // Cover is a direct child — check whether the sibling is a semantic
+    if (left == cover) {
+        if (dynamic_cast<const syngt::RESemantic*>(right)) return {node, true};
+        return {cover, true};
+    }
+    if (right == cover) {
+        if (dynamic_cast<const syngt::RESemantic*>(left)) return {node, true};
+        return {cover, true};
+    }
+
+    auto [lc, lcFound] = ExpandSemanticsCover(left, cover);
+    if (lcFound) {
+        // If we consumed the whole left branch, check if right is semantic
+        if (lc == left && dynamic_cast<const syngt::RESemantic*>(right))
+            return {node, true};
+        return {lc, true};
+    }
+
+    auto [rc, rcFound] = ExpandSemanticsCover(right, cover);
+    if (rcFound) {
+        if (rc == right && dynamic_cast<const syngt::RESemantic*>(left))
+            return {node, true};
+        return {rc, true};
+    }
+
+    return {nullptr, false};
+}
+
 static std::string GetFreeNonTerminalName() {
     int index = 1;
     while (true) {
@@ -2463,6 +2539,21 @@ void ExtractRule() {
         AppendOutput("Selection does not match any subtree!\n");
         return;
     }
+
+    // Expand cover to absorb adjacent RESemantic nodes in AND chains,
+    // but only when the cover is a single leaf (one object selected).
+    // For compound covers (multi-object selection) the user has explicitly
+    // set the bounds — do not pull in extra semantics automatically.
+    if (dynamic_cast<const syngt::RETerminal*>(cover) ||
+        dynamic_cast<const syngt::RENonTerminal*>(cover)) {
+        const syngt::RETree* prev = nullptr;
+        while (prev != cover) {
+            prev = cover;
+            auto [expanded, found] = ExpandSemanticsCover(nt->root(), cover);
+            if (found) cover = expanded;
+        }
+    }
+
     if (cover == nt->root()) {
         ClearOutput();
         AppendOutput("Minimal regular expression matches whole rule!\n");
@@ -2559,7 +2650,7 @@ void OpenAllMacros() {
     if (!grammar) { ClearOutput(); AppendOutput("No grammar loaded!\n"); return; }
     auto nts = grammar->getNonTerminals();
     if (activeNTIndex < 0 || activeNTIndex >= static_cast<int>(nts.size())) return;
-    grammar->openMacroRefs(nts[activeNTIndex]);
+    grammar->openMacroRefs(nts[activeNTIndex], true);
     ClearDiagramLayouts();
     UpdateDiagram();
     ClearOutput();
@@ -2578,18 +2669,19 @@ void CloseAllDefinitions() {
 }
 
 void NewFile() {
-    grammar = std::make_unique<syngt::Grammar>();
-    grammar->fillNew();
-    grammarText[0] = '\0';
+    strcpy_s(grammarText, sizeof(grammarText), "S : eps.\nEOGram!\n");
     grammarWidgetVersion++;
     currentFile[0] = '\0';
-    activeNTIndex = -1;
+    activeNTIndex = 0;
     selectionMask.clear();
     drawObjects.reset();
     undoRedo.clearData();
     ClearDiagramLayouts();
     ClearOutput();
     AppendOutput("New grammar created.\n");
+    skipHistorySave = true;
+    RebuildGrammarFromText();
+    skipHistorySave = false;
     SaveCurrentState();
 }
 
@@ -3063,6 +3155,8 @@ int main(int, char**)
             if (ImGui::BeginMenu("Grammar")) {
                 if (ImGui::MenuItem("Parse", "F5")) ParseGrammar();
                 ImGui::Separator();
+                if (ImGui::MenuItem("Semantics...")) showSemanticsWindow = !showSemanticsWindow;
+                ImGui::Separator();
                 if (ImGui::MenuItem("Eliminate Left Recursion")) EliminateLeftRecursion();
                 if (ImGui::MenuItem("Eliminate Right Recursion")) EliminateRightRecursion();
                 if (ImGui::MenuItem("Regularize (Both)")) EliminateBothRecursions();
@@ -3076,6 +3170,7 @@ int main(int, char**)
                 if (ImGui::MenuItem("Toggle Macro")) ToggleMacro();
                 if (ImGui::MenuItem("Open All Macros")) OpenAllMacros();
                 if (ImGui::MenuItem("Close All Definitions")) CloseAllDefinitions();
+                ImGui::MenuItem("Macros Opened by Default", nullptr, &g_macroOpenedDefault);
                 ImGui::EndMenu();
             }
             if (ImGui::BeginMenu("Help")) {
@@ -3084,11 +3179,35 @@ int main(int, char**)
                 ImGui::EndMenu();
             }
             
-            ImGui::SameLine(io.DisplaySize.x - 400);
-            if (currentFile[0] != '\0') {
-                ImGui::Text("File: %s", currentFile);
-            } else {
-                ImGui::Text("No file loaded");
+            {
+                const float fileTextMaxWidth = 400.0f;
+                ImGui::SameLine(io.DisplaySize.x - fileTextMaxWidth);
+                if (currentFile[0] != '\0') {
+                    const char* displayPath = currentFile;
+                    char truncated[256];
+                    float textWidth = ImGui::CalcTextSize(currentFile).x + ImGui::CalcTextSize("File: ").x;
+                    if (textWidth > fileTextMaxWidth - 8.0f) {
+                        // Find just the filename (after last / or \)
+                        const char* filename = currentFile;
+                        for (const char* q = currentFile; *q; q++)
+                            if (*q == '/' || *q == '\\') filename = q + 1;
+
+                        // Try to fit as much of the tail as possible, but at least the filename
+                        const char* p = currentFile + strlen(currentFile);
+                        while (p > filename) {
+                            float w = ImGui::CalcTextSize(p).x + ImGui::CalcTextSize("File: ...").x;
+                            if (w <= fileTextMaxWidth - 8.0f) break;
+                            p++;
+                        }
+                        // p may have advanced past filename — clamp to filename
+                        if (p > filename) p = filename;
+                        snprintf(truncated, sizeof(truncated), "...%s", p);
+                        displayPath = truncated;
+                    }
+                    ImGui::Text("File: %s", displayPath);
+                } else {
+                    ImGui::Text("No file loaded");
+                }
             }
             
             ImGui::EndMainMenuBar();
@@ -3248,7 +3367,8 @@ int main(int, char**)
                                 int topY  = objY;
                                 int botY  = objY;
                                 if (objType == syngt::graphics::ctDrawObjectTerminal ||
-                                    objType == syngt::graphics::ctDrawObjectNonTerminal) {
+                                    objType == syngt::graphics::ctDrawObjectNonTerminal ||
+                                    objType == syngt::graphics::ctDrawObjectMacro) {
                                     topY = objY - 20;
                                     botY = objY + 20;
                                 } else if (objType == syngt::graphics::ctDrawObjectFirst ||
@@ -3391,7 +3511,8 @@ int main(int, char**)
 
                                         int t = obj->getType();
                                         if (t != syngt::graphics::ctDrawObjectTerminal &&
-                                            t != syngt::graphics::ctDrawObjectNonTerminal) {
+                                            t != syngt::graphics::ctDrawObjectNonTerminal &&
+                                            t != syngt::graphics::ctDrawObjectMacro) {
                                             continue;
                                         }
 
@@ -3691,25 +3812,8 @@ int main(int, char**)
             CloseAllDefinitions();
         }
         ImGui::Separator();
-        ImGui::Text("Semantics");
-        if (grammar) {
-            auto semItems = grammar->getSemantics();
-            if (semItems.empty()) {
-                ImGui::TextDisabled("(none)");
-            } else {
-                for (int si = 0; si < static_cast<int>(semItems.size()); ++si) {
-                    ImGui::PushID(si);
-                    ImGui::TextUnformatted(semItems[si].c_str());
-                    ImGui::SameLine();
-                    if (ImGui::SmallButton("x")) {
-                        DeleteSemantic(semItems[si]);
-                        UpdateDiagram();
-                    }
-                    ImGui::PopID();
-                }
-            }
-        } else {
-            ImGui::TextDisabled("(no grammar)");
+        if (ImGui::Button("Semantics...", ImVec2(-FLT_MIN, 0))) {
+            showSemanticsWindow = !showSemanticsWindow;
         }
         ImGui::EndChild();
         
@@ -3742,6 +3846,49 @@ int main(int, char**)
         ImGui::EndChild();
 
         ImGui::End();
+
+        // Semantics window
+        if (showSemanticsWindow) {
+            ImGui::SetNextWindowSize(ImVec2(320, 420), ImGuiCond_FirstUseEver);
+            if (ImGui::Begin("Semantics", &showSemanticsWindow)) {
+                static char newSemName[256] = "";
+                ImGui::Text("New semantic:");
+                ImGui::SetNextItemWidth(-70.0f);
+                ImGui::InputText("##newsemname", newSemName, sizeof(newSemName));
+                ImGui::SameLine();
+                if (ImGui::Button("Add##sem") && newSemName[0] != '\0' && grammar) {
+                    std::string sname = newSemName;
+                    if (sname[0] != '$') sname = "$" + sname;
+                    grammar->addSemantic(sname);
+                    newSemName[0] = '\0';
+                    UpdateDiagram();
+                    SaveCurrentState();
+                }
+                ImGui::Separator();
+                if (grammar) {
+                    auto semItems = grammar->getSemantics();
+                    if (semItems.empty()) {
+                        ImGui::TextDisabled("(none)");
+                    } else {
+                        ImGui::BeginChild("SemList", ImVec2(0, 0), false);
+                        for (int si = 0; si < static_cast<int>(semItems.size()); ++si) {
+                            ImGui::PushID(si);
+                            ImGui::TextUnformatted(semItems[si].c_str());
+                            ImGui::SameLine();
+                            if (ImGui::SmallButton("Delete")) {
+                                DeleteSemantic(semItems[si]);
+                                UpdateDiagram();
+                            }
+                            ImGui::PopID();
+                        }
+                        ImGui::EndChild();
+                    }
+                } else {
+                    ImGui::TextDisabled("(no grammar)");
+                }
+            }
+            ImGui::End();
+        }
 
         // Editing dialogues
         if (showAddTerminalDialog) {

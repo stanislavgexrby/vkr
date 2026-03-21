@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include <syngt/core/Grammar.h>
 #include <syngt/core/NTListItem.h>
+#include <syngt/core/Types.h>
 #include <syngt/regex/RETerminal.h>
 #include <syngt/regex/REAnd.h>
 
@@ -36,10 +37,44 @@ TEST(NTListItemTest, SetRootUpdatesValue) {
 TEST(NTListItemTest, CopyRETree) {
     Grammar grammar;
     NTListItem item(&grammar, "test");
-    
+
     item.setValue("'test'.");
-    
+
     auto copy = item.copyRETree();
     ASSERT_NE(copy, nullptr);
     EXPECT_EQ(copy->toString(EmptyMask(), false), "'test'");
+}
+
+TEST(NTListItemTest, MacroFlagDefault) {
+    Grammar grammar;
+    NTListItem item(&grammar, "M");
+    EXPECT_FALSE(item.isMacro());
+    EXPECT_EQ(item.mark(), cmNotMarked);
+}
+
+TEST(NTListItemTest, SetMacroTrue) {
+    Grammar grammar;
+    NTListItem item(&grammar, "M");
+    item.setMacro(true);
+    EXPECT_TRUE(item.isMacro());
+    EXPECT_EQ(item.mark(), cmOpenMacro);
+}
+
+TEST(NTListItemTest, SetMacroFalse) {
+    Grammar grammar;
+    NTListItem item(&grammar, "M");
+    item.setMacro(true);
+    item.setMacro(false);
+    EXPECT_FALSE(item.isMacro());
+    EXPECT_EQ(item.mark(), cmNotMarked);
+}
+
+TEST(NTListItemTest, SetMarkInProgress) {
+    Grammar grammar;
+    NTListItem item(&grammar, "M");
+    item.setMacro(true);
+    item.setMark(cmInProgress);
+    EXPECT_EQ(item.mark(), cmInProgress);
+    // isMacro checks for cmOpenMacro only
+    EXPECT_FALSE(item.isMacro());
 }

@@ -194,13 +194,18 @@ std::unique_ptr<RETree> Parser::parseK() {
     
     if (isLetterOrDigit(ch)) {
         std::string name = readIdentifier();
-        
-        if (name == "LETTER" || name == "DIGIT" || name == "ID" || 
+
+        // "eps" is the epsilon (empty word) keyword — terminal with ID=0
+        if (name == "eps") {
+            return std::make_unique<RETerminal>(m_grammar, 0);
+        }
+
+        if (name == "LETTER" || name == "DIGIT" || name == "ID" ||
             name == "chars" || name == "digit" || name == "digits") {
             int id = m_grammar->addTerminal(name);
             return std::make_unique<RETerminal>(m_grammar, id);
         }
-        
+
         int id = m_grammar->addNonTerminal(name);
         return std::make_unique<RENonTerminal>(m_grammar, id, false);
     }

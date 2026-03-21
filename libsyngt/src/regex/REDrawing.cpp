@@ -379,12 +379,18 @@ DrawObject* RENonTerminal::drawObjectsToRight(
     
     height = ElementHalfHeight;
 
-    auto nonTerminal = std::make_unique<DrawObjectNonTerminal>(m_grammar, m_id);
-    nonTerminal->setInArrow(makeArrowForwardAlways(fromDO, ward, semantics));
-    nonTerminal->setPlaceToRight();
-    
-    DrawObject* result = nonTerminal.get();
-    list->add(std::move(nonTerminal));
+    NTListItem* ntItem = getListItem();
+    std::unique_ptr<DrawObjectLeaf> leafObj;
+    if (ntItem && ntItem->isMacro()) {
+        leafObj = std::make_unique<DrawObjectMacro>(m_grammar, m_id);
+    } else {
+        leafObj = std::make_unique<DrawObjectNonTerminal>(m_grammar, m_id);
+    }
+    leafObj->setInArrow(makeArrowForwardAlways(fromDO, ward, semantics));
+    leafObj->setPlaceToRight();
+
+    DrawObject* result = leafObj.get();
+    list->add(std::move(leafObj));
     m_drawObj = list->count() - 1;
 
     return result;

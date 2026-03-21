@@ -1,6 +1,7 @@
 #include <syngt/regex/RENonTerminal.h>
 #include <syngt/core/Grammar.h>
 #include <syngt/core/NTListItem.h>
+#include <syngt/core/Types.h>
 #include <stdexcept>
 
 namespace syngt {
@@ -65,11 +66,24 @@ std::string RENonTerminal::toString(const SelectionMask& mask, bool reverse) con
 }
 
 bool RENonTerminal::allMacroWasOpened() const {
-    if (m_isOpen) {
-        RETree* root = getRoot();
-        return root ? root->allMacroWasOpened() : true;
+    NTListItem* item = getListItem();
+    if (!item) return true;
+
+    if (item->mark() == cmInProgress) {
+        throw std::runtime_error("Circular macro reference detected: " + getNameFromID());
     }
-    return false;
+
+    if (!item->isMacro()) return true;
+
+    int prevMark = item->mark();
+    item->setMark(cmInProgress);
+    m_isOpen = true;
+
+    RETree* root = getRoot();
+    bool result = root ? root->allMacroWasOpened() : true;
+
+    item->setMark(prevMark);
+    return result;
 }
 
 }

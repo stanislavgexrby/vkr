@@ -308,17 +308,17 @@ void Grammar::regularize() {
 // Tree-walking helpers for macro open/close
 // ---------------------------------------------------------------------------
 
-static void walkOpenMacros(RETree* node, Grammar* grammar) {
+static void walkOpenMacros(RETree* node, Grammar* grammar, bool defaultOpen) {
     if (!node) return;
     auto* ntNode = dynamic_cast<RENonTerminal*>(node);
     if (ntNode) {
         NTListItem* item = grammar->getNTItem(grammar->nonTerminals()->getString(ntNode->id()));
         if (item && item->isMacro()) {
-            ntNode->setOpen(true);
+            ntNode->setOpen(defaultOpen);
         }
     }
-    walkOpenMacros(node->left(), grammar);
-    walkOpenMacros(node->right(), grammar);
+    walkOpenMacros(node->left(), grammar, defaultOpen);
+    walkOpenMacros(node->right(), grammar, defaultOpen);
 }
 
 static void walkCloseAllRefs(RETree* node) {
@@ -331,10 +331,10 @@ static void walkCloseAllRefs(RETree* node) {
     walkCloseAllRefs(node->right());
 }
 
-void Grammar::openMacroRefs(const std::string& ntName) {
+void Grammar::openMacroRefs(const std::string& ntName, bool defaultOpen) {
     NTListItem* item = getNTItem(ntName);
     if (item && item->root()) {
-        walkOpenMacros(item->root(), this);
+        walkOpenMacros(item->root(), this, defaultOpen);
     }
 }
 
