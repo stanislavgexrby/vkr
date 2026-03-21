@@ -41,9 +41,9 @@ static bool canProduceEpsilon(const RETree* node, const Grammar* grammar) {
     if (auto* termNode = dynamic_cast<const RETerminal*>(node))
         return grammar->getTerminalName(termNode->getID()).empty();
 
-    // Semantic "@" is used as an epsilon marker
-    if (auto* semNode = dynamic_cast<const RESemantic*>(node))
-        return grammar->getSemanticName(semNode->id()) == "@";
+    // Semantic actions don't consume any input tokens — treat as transparent (epsilon)
+    if (dynamic_cast<const RESemantic*>(node))
+        return true;
 
     return false;
 }
