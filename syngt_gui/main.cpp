@@ -3098,12 +3098,7 @@ int main(int, char**)
 #endif
 
     // Common initialization
-    const char* exampleGrammar = 
-        "{ Example: Simple expression grammar }\n"
-        "E : T, '+', E ; T.\n"
-        "T : '(', E, ')' ; 'id'.\n"
-        "EOGram!\n";
-    strcpy(grammarText, exampleGrammar);
+    NewFile();
 
     // Main loop
     bool done = false;
