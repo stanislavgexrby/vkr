@@ -65,7 +65,13 @@ void ToggleMacro();
 void OpenAllMacros();
 void CloseAllDefinitions();
 void NewFile();
+void LoadFile();
 void ImportFromGEdit();
+void SaveFile();
+void TryNewFile();
+void TryLoadFile();
+void TryImportFromGEdit();
+void TryExit(bool& done);
 void DiagramAddExtendedPoint();
 void AddNonTerminalReferenceToGrammar(const std::string& name);
 void FindAndCreateMissingNonTerminals(const std::string& rule);
@@ -165,6 +171,16 @@ static bool showEditDialog = false;
 static char newSymbolName[256] = "";
 static bool useOrOperator = false;
 static bool g_macroOpenedDefault = false;
+
+// Unsaved-changes tracking
+enum class PendingAction { None, New, Open, Import, Exit };
+static bool g_isDirty = false;
+static PendingAction g_pendingAction = PendingAction::None;
+static bool g_showUnsavedDialog = false;
+
+static bool HasUnsavedChanges() {
+    return g_isDirty && grammar && !grammar->getNonTerminals().empty();
+}
 
 // Layout sizes
 static float leftWidth = 800.0f;
@@ -792,6 +808,7 @@ void SaveCurrentState() {
     }
 
     undoRedo.addState(names, values, macroFlags, activeNTIndex, selectionMask, grammarText);
+    g_isDirty = true;
 }
 
 void SaveCurrentDiagramToCache() {
@@ -891,6 +908,15 @@ void Undo() {
     }
 
     if (grammar) {
+        // Remember which NT the user is currently viewing by name so we can
+        // stay on it after undo if it still exists in the restored grammar.
+        std::string viewedNTName;
+        {
+            auto curNTs = grammar->getNonTerminals();
+            if (activeNTIndex >= 0 && activeNTIndex < static_cast<int>(curNTs.size()))
+                viewedNTName = curNTs[activeNTIndex];
+        }
+
         std::vector<std::string> names;
         std::vector<std::string> values;
         std::vector<bool> macroFlags;
@@ -916,6 +942,19 @@ void Undo() {
         RebuildGrammarFromText();
         skipHistorySave = false;
 
+        // If the NT the user was viewing still exists in the restored grammar,
+        // stay on it instead of jumping to the saved index (which may be 0).
+        if (!viewedNTName.empty() && grammar) {
+            auto restoredNTs = grammar->getNonTerminals();
+            for (int i = 0; i < static_cast<int>(restoredNTs.size()); ++i) {
+                if (restoredNTs[i] == viewedNTName) {
+                    activeNTIndex = i;
+                    UpdateDiagram();
+                    break;
+                }
+            }
+        }
+
         ClearOutput();
         AppendOutput("Undo successful\n");
     }
@@ -929,6 +968,14 @@ void Redo() {
     }
 
     if (grammar) {
+        // Remember which NT the user is currently viewing by name.
+        std::string viewedNTName;
+        {
+            auto curNTs = grammar->getNonTerminals();
+            if (activeNTIndex >= 0 && activeNTIndex < static_cast<int>(curNTs.size()))
+                viewedNTName = curNTs[activeNTIndex];
+        }
+
         std::vector<std::string> names;
         std::vector<std::string> values;
         std::vector<bool> macroFlags;
@@ -953,6 +1000,18 @@ void Redo() {
         skipHistorySave = true;
         RebuildGrammarFromText();
         skipHistorySave = false;
+
+        // Stay on the currently viewed NT if it still exists after redo.
+        if (!viewedNTName.empty() && grammar) {
+            auto restoredNTs = grammar->getNonTerminals();
+            for (int i = 0; i < static_cast<int>(restoredNTs.size()); ++i) {
+                if (restoredNTs[i] == viewedNTName) {
+                    activeNTIndex = i;
+                    UpdateDiagram();
+                    break;
+                }
+            }
+        }
 
         ClearOutput();
         AppendOutput("Redo successful\n");
@@ -2151,7 +2210,9 @@ void LoadFile() {
         AppendOutput(filename.c_str());
         AppendOutput("\n");
 
+        undoRedo.clearData(); // loaded file is the new base state — can't undo past it
         ParseGrammar(false); // don't clear layouts we just loaded
+        g_isDirty = false;   // just loaded — not dirty
 
     } catch (const std::exception& e) {
         ClearOutput();
@@ -2195,6 +2256,7 @@ void SaveFile() {
 
         file.close();
 
+        g_isDirty = false;
         ClearOutput();
         AppendOutput("File saved: ");
         AppendOutput(filename.c_str());
@@ -2683,6 +2745,7 @@ void NewFile() {
     RebuildGrammarFromText();
     skipHistorySave = false;
     SaveCurrentState();
+    g_isDirty = false; // fresh file — not dirty
 }
 
 void ImportFromGEdit() {
@@ -2719,6 +2782,46 @@ void ImportFromGEdit() {
         AppendOutput("Import Error:\n");
         AppendOutput(e.what());
         AppendOutput("\n");
+    }
+}
+
+// ---- Unsaved-changes check wrappers ----
+// Each Try* function either executes immediately (no unsaved changes)
+// or stores the pending action and opens the confirmation dialog.
+
+void TryNewFile() {
+    if (HasUnsavedChanges()) {
+        g_pendingAction = PendingAction::New;
+        g_showUnsavedDialog = true;
+    } else {
+        NewFile();
+    }
+}
+
+void TryLoadFile() {
+    if (HasUnsavedChanges()) {
+        g_pendingAction = PendingAction::Open;
+        g_showUnsavedDialog = true;
+    } else {
+        LoadFile();
+    }
+}
+
+void TryImportFromGEdit() {
+    if (HasUnsavedChanges()) {
+        g_pendingAction = PendingAction::Import;
+        g_showUnsavedDialog = true;
+    } else {
+        ImportFromGEdit();
+    }
+}
+
+void TryExit(bool& done) {
+    if (HasUnsavedChanges()) {
+        g_pendingAction = PendingAction::Exit;
+        g_showUnsavedDialog = true;
+    } else {
+        done = true;
     }
 }
 
@@ -2904,6 +3007,14 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
         if ((wParam & 0xfff0) == SC_KEYMENU)
             return 0;
         break;
+    case WM_CLOSE:
+        if (HasUnsavedChanges()) {
+            g_pendingAction = PendingAction::Exit;
+            g_showUnsavedDialog = true;
+            return 0; // prevent default close; dialog will handle it
+        }
+        ::DestroyWindow(hWnd);
+        return 0;
     case WM_DESTROY:
         ::PostQuitMessage(0);
         return 0;
@@ -3121,8 +3232,11 @@ int main(int, char**)
         ImGui::NewFrame();
 #else
         glfwPollEvents();
-        if (glfwWindowShouldClose(g_Window))
-            break;
+        if (glfwWindowShouldClose(g_Window)) {
+            glfwSetWindowShouldClose(g_Window, GLFW_FALSE);
+            TryExit(done);
+        }
+        if (done) break;
 
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
@@ -3132,14 +3246,14 @@ int main(int, char**)
         // Menu bar
         if (ImGui::BeginMainMenuBar()) {
             if (ImGui::BeginMenu("File")) {
-                if (ImGui::MenuItem("New", "Ctrl+N")) NewFile();
-                if (ImGui::MenuItem("Open...", "Ctrl+O")) LoadFile();
+                if (ImGui::MenuItem("New", "Ctrl+N")) TryNewFile();
+                if (ImGui::MenuItem("Open...", "Ctrl+O")) TryLoadFile();
                 if (ImGui::MenuItem("Save", "Ctrl+S")) SaveFile();
                 if (ImGui::MenuItem("Save As...")) SaveFileAs();
                 ImGui::Separator();
-                if (ImGui::MenuItem("Import from GEdit...")) ImportFromGEdit();
+                if (ImGui::MenuItem("Import from GEdit...")) TryImportFromGEdit();
                 ImGui::Separator();
-                if (ImGui::MenuItem("Exit", "Alt+F4")) done = true;
+                if (ImGui::MenuItem("Exit", "Alt+F4")) TryExit(done);
                 ImGui::EndMenu();
             }
             if (ImGui::BeginMenu("Edit")) {
@@ -3227,11 +3341,11 @@ int main(int, char**)
             }
             // Ctrl+O - Open
             if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_O, false)) {
-                LoadFile();
+                TryLoadFile();
             }
             // Ctrl+N - New
             if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_N, false)) {
-                NewFile();
+                TryNewFile();
             }
             // F5 - Parse
             if (ImGui::IsKeyPressed(ImGuiKey_F5, false)) {
@@ -4185,6 +4299,57 @@ int main(int, char**)
             if (ImGui::Button("Cancel")) {
                 s_extractCoverNode = nullptr;
                 ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
+
+        // Unsaved Changes dialog
+        if (g_showUnsavedDialog) {
+            ImGui::OpenPopup("Unsaved Changes");
+            g_showUnsavedDialog = false;
+        }
+        if (ImGui::BeginPopupModal("Unsaved Changes", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+            if (currentFile[0] != '\0') {
+                const char* name = currentFile;
+                for (const char* p = currentFile; *p; ++p)
+                    if (*p == '/' || *p == '\\') name = p + 1;
+                ImGui::Text("Save changes to '%s'?", name);
+            } else {
+                ImGui::Text("Save changes to current grammar?");
+            }
+            ImGui::Separator();
+            if (ImGui::Button("Save", ImVec2(90, 0))) {
+                ImGui::CloseCurrentPopup();
+                SaveFile();
+                // Only proceed if save succeeded (file was actually written)
+                if (!g_isDirty) {
+                    switch (g_pendingAction) {
+                        case PendingAction::New:    NewFile(); break;
+                        case PendingAction::Open:   LoadFile(); break;
+                        case PendingAction::Import: ImportFromGEdit(); break;
+                        case PendingAction::Exit:   done = true; break;
+                        default: break;
+                    }
+                }
+                g_pendingAction = PendingAction::None;
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Don't Save", ImVec2(90, 0))) {
+                ImGui::CloseCurrentPopup();
+                g_isDirty = false;
+                switch (g_pendingAction) {
+                    case PendingAction::New:    NewFile(); break;
+                    case PendingAction::Open:   LoadFile(); break;
+                    case PendingAction::Import: ImportFromGEdit(); break;
+                    case PendingAction::Exit:   done = true; break;
+                    default: break;
+                }
+                g_pendingAction = PendingAction::None;
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Cancel", ImVec2(90, 0))) {
+                ImGui::CloseCurrentPopup();
+                g_pendingAction = PendingAction::None;
             }
             ImGui::EndPopup();
         }

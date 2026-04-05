@@ -351,7 +351,7 @@ DrawObject* REIteration::drawObjectsToRight(
     DrawObjectPoint* rightPtr = rightPoint.get();
     list->add(std::move(rightPoint));
     
-    int cy = height1 + VerticalSpace;
+    int cy = std::max(height1, ElementHalfHeight) + VerticalSpace;
     if (height2 > 0) {
         cy += height2;
     } else {
