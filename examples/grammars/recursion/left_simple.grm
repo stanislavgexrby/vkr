@@ -1,0 +1,9 @@
+{ Простая прямая левая рекурсия }
+{ E : E '+' T | T }
+{ Применить: Grammar -> Eliminate Left Recursion }
+{ Результат: E : T @*( '+' T ) }
+
+E : E , '+' , T ; T .
+T : 'id' .
+
+EOGram!

@@ -65,7 +65,7 @@ TEST_F(RETreeTest, IterationOperation) {
     auto iterOp = REIteration::make(std::move(term1), std::move(term2));
     
     EXPECT_EQ(iterOp->operationChar(), '*');
-    EXPECT_EQ(iterOp->toString(EmptyMask(), false), "'a'*'b'");
+    EXPECT_EQ(iterOp->toString(EmptyMask(), false), "'a'#'b'");
 }
 
 TEST_F(RETreeTest, ComplexExpression) {

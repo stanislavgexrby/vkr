@@ -1,0 +1,7 @@
+{ Список идентификаторов через запятую }
+{ list : ID (',' ID)* }
+
+list : ID , @*( ',' , ID ) .
+ID   : 'LETTER' , @*( 'LETTER' ; 'DIGIT' ) .
+
+EOGram!

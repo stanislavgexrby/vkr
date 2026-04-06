@@ -1,0 +1,10 @@
+{ Пример опциональных элементов }
+{ Объявление переменной с необязательным инициализатором }
+{ var x [= expr] }
+
+declaration : 'var' , ID , ( eps ; '=' , expr ) .
+expr        : ID ; number .
+ID          : 'LETTER' , @*( 'LETTER' ; 'DIGIT' ) .
+number      : 'DIGIT' , @*( 'DIGIT' ) .
+
+EOGram!

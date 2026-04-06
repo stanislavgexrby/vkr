@@ -1,0 +1,9 @@
+{ Праворекурсивный список }
+{ List : item ',' List | item }
+{ Применить: Grammar -> Eliminate Right Recursion }
+{ Результат: List : item @*( ',' item ) }
+
+list : item , ',' , list ; item .
+item : 'id' .
+
+EOGram!

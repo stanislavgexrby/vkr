@@ -28,12 +28,13 @@ TEST_F(ParserTest, SimpleAlternative) {
 TEST_F(ParserTest, Iteration) {
     grammar->addTerminal("statement");
     grammar->addTerminal("expression");
-    
-    auto tree = parser->parse("statement * expression.", grammar.get());
-    
+
+    // Binary iteration uses '#' in RBNF notation
+    auto tree = parser->parse("statement # expression.", grammar.get());
+
     EXPECT_TRUE(tree != nullptr);
     std::string result = tree->toString(EmptyMask(), false);
-    EXPECT_TRUE(result.find('*') != std::string::npos);
+    EXPECT_TRUE(result.find('#') != std::string::npos);
 }
 
 TEST_F(ParserTest, WithParentheses) {

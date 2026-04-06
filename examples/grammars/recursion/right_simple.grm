@@ -1,0 +1,8 @@
+{ Простая прямая правая рекурсия }
+{ A : 'a' A | 'b' }
+{ Применить: Grammar -> Eliminate Right Recursion }
+{ Результат: A : 'b' @*( 'a' ) }
+
+A : 'a' , A ; 'b' .
+
+EOGram!

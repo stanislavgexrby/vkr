@@ -1,0 +1,4 @@
+expr=expr,'+',term;term.
+term=term,'*',factor;factor.
+factor='(',expr,')';'id'.
+EOGram

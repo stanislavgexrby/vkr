@@ -1,0 +1,24 @@
+{ Мини-подмножество C }
+{ Функции, объявления, if/while/return, выражения }
+
+program    : @+( func_def ) .
+func_def   : type , ID , '(' , ( param_list ; eps ) , ')' , block .
+param_list : param , @*( ',' , param ) .
+param      : type , ID .
+block      : '{' , @*( stmt ) , '}' .
+stmt       : decl_stmt ; expr_stmt ; if_stmt ; while_stmt ; return_stmt ; block .
+decl_stmt  : type , ID , ( '=' , expr ; eps ) , ';' .
+expr_stmt  : expr , ';' .
+if_stmt    : 'if' , '(' , cond , ')' , stmt , ( 'else' , stmt ; eps ) .
+while_stmt : 'while' , '(' , cond , ')' , stmt .
+return_stmt: 'return' , ( expr ; eps ) , ';' .
+cond       : expr , relop , expr .
+expr       : term , @*( ('+' ; '-') , term ) .
+term       : factor , @*( ('*' ; '/') , factor ) .
+factor     : '(' , expr , ')' ; ID , ( '(' , arg_list , ')' ; eps ) ; 'num' .
+arg_list   : expr , @*( ',' , expr ) .
+relop      : '==' ; '!=' ; '<' ; '>' ; '<=' ; '>=' .
+type       : 'int' ; 'float' ; 'void' ; 'char' .
+ID         : 'LETTER' , @*( 'LETTER' ; 'DIGIT' ; '_' ) .
+
+EOGram!

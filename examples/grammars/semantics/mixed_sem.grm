@@ -1,0 +1,14 @@
+{ Семантики в нескольких позициях: до, после, внутри }
+{ Демонстрирует расположение $-действий в разных позициях правила }
+
+program : $begin , @+( decl ; stmt ) , $end .
+decl    : 'var' , ID , $decl_var , ';' .
+stmt    : ID , $load_id , '=' , expr , $assign , ';' ;
+          'print' , expr , $print , ';' ;
+          'return' , expr , $return , ';' .
+expr    : term , @*( '+' , term , $add ; '-' , term , $sub ) .
+term    : factor , @*( '*' , factor , $mul ; '/' , factor , $div ) .
+factor  : '(' , expr , ')' ; ID , $load_id ; 'num' , $push_num .
+ID      : 'LETTER' , @*( 'LETTER' ; 'DIGIT' ) .
+
+EOGram!

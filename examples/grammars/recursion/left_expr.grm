@@ -1,0 +1,9 @@
+{ Леворекурсивная грамматика арифметических выражений }
+{ Классический пример: три уровня приоритета }
+{ Применить: Grammar -> Eliminate Left Recursion }
+
+expr   : expr , '+' , term ; expr , '-' , term ; term .
+term   : term , '*' , factor ; term , '/' , factor ; factor .
+factor : '(' , expr , ')' ; 'id' ; 'num' .
+
+EOGram!

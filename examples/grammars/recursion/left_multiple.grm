@@ -1,0 +1,8 @@
+{ Несколько рекурсивных альтернатив }
+{ E : E '+' | E '-' | num }
+{ Применить: Grammar -> Eliminate Left Recursion }
+{ Результат: E : num @*('+' ; '-') }
+
+E : E , '+' ; E , '-' ; num .
+
+EOGram!

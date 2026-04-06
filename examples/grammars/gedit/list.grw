@@ -1,0 +1,3 @@
+list=ID,@*(',',ID).
+ID='LETTER',@*('LETTER';'DIGIT').
+EOGram

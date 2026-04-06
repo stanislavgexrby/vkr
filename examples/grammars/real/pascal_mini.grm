@@ -1,0 +1,21 @@
+{ Мини-подмножество Pascal }
+{ program, begin/end, var, if/then/else, while/do, writeln }
+
+program    : 'program' , ID , ';' , block , '.' .
+block      : ( 'var' , @+( var_decl ) ; eps ) , 'begin' , stmt_list , 'end' .
+var_decl   : ID , @*( ',' , ID ) , ':' , type , ';' .
+type       : 'integer' ; 'real' ; 'boolean' ; 'string' .
+stmt_list  : stmt , @*( ';' , stmt ) .
+stmt       : assign_stmt ; if_stmt ; while_stmt ; write_stmt ; eps .
+assign_stmt: ID , ':=' , expr .
+if_stmt    : 'if' , cond , 'then' , stmt , ( 'else' , stmt ; eps ) .
+while_stmt : 'while' , cond , 'do' , stmt .
+write_stmt : 'writeln' , '(' , expr , @*( ',' , expr ) , ')' .
+cond       : expr , relop , expr .
+expr       : term , @*( ('+' ; '-') , term ) .
+term       : factor , @*( ('*' ; '/') , factor ) .
+factor     : '(' , expr , ')' ; ID ; 'num' ; 'true' ; 'false' .
+relop      : '=' ; '<>' ; '<' ; '>' ; '<=' ; '>=' .
+ID         : 'LETTER' , @*( 'LETTER' ; 'DIGIT' ; '_' ) .
+
+EOGram!

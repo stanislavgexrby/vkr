@@ -1,0 +1,12 @@
+{ Присваивание и выражения с семантическими действиями }
+{ $load — загрузить переменную }
+{ $store — сохранить результат в переменную }
+{ $const — загрузить константу }
+
+stmt   : ID , $load , '=' , expr , $store , ';' .
+expr   : term , @*( '+' , term , $add ; '-' , term , $sub ) .
+term   : factor , @*( '*' , factor , $mul ) .
+factor : '(' , expr , ')' ; ID , $load ; 'num' , $const .
+ID     : 'LETTER' , @*( 'LETTER' ; 'DIGIT' ) .
+
+EOGram!

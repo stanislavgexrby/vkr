@@ -1,7 +1,0 @@
-S : expr .
-expr : term,expr_rec .
-term : factor,term_rec .
-factor : '(',expr,')';ID;NUM .
-expr_rec : '+',term,expr_rec;'-',term,expr_rec;@ .
-term_rec : '*',factor,term_rec;'/',factor,term_rec;@ .
-EOGram!

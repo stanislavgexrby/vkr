@@ -1,0 +1,9 @@
+program=stmt,@*(';',stmt).
+stmt=ID,'=',expr;'if',cond,'then',stmt,['else',stmt];'while',cond,'do',stmt.
+cond=expr,relop,expr.
+expr=term,@*('+',term;'-',term).
+term=factor,@*('*',factor;'/',factor).
+factor='(',expr,')';ID;'num'.
+relop='<';'>';'=';'<>'.
+ID='LETTER',@*('LETTER';'DIGIT').
+EOGram

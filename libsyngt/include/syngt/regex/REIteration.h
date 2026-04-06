@@ -37,25 +37,7 @@ public:
         if (m_first) m_first->tryToSetEmptyMark();
     }
     
-    std::string toString(const SelectionMask& mask, bool reverse) const override {
-        if (!m_first || !m_second) {
-            return "";
-        }
-        
-        std::string result = m_first->toString(mask, reverse) + '*';
-        
-        // Wrap the body in parentheses whenever it is a compound expression
-        // (AND, OR, or nested iteration), so that round-tripping through the
-        // parser produces the same tree.  Without this, e.g. @*(A,B) would
-        // serialise as @*A,B, which parses back as REAnd(@*A, B).
-        if (dynamic_cast<const REBinaryOp*>(m_second.get())) {
-            result += '(' + m_second->toString(mask, reverse) + ')';
-        } else {
-            result += m_second->toString(mask, reverse);
-        }
-        
-        return result;
-    }
+    std::string toString(const SelectionMask& mask, bool reverse) const override;
     
     static std::unique_ptr<REIteration> make(std::unique_ptr<RETree> first,
                                               std::unique_ptr<RETree> second) {

@@ -44,20 +44,20 @@ TEST_F(REOperationsTest, DeepNesting) {
 }
 
 TEST_F(REOperationsTest, MultipleIterations) {
-    // 'a' * ('b' * 'c')
+    // 'a' # ('b' # 'c')  — binary iteration uses '#' operator
     int aId = grammar->addTerminal("a");
     int bId = grammar->addTerminal("b");
     int cId = grammar->addTerminal("c");
-    
+
     auto a = std::make_unique<RETerminal>(grammar.get(), aId);
     auto b = std::make_unique<RETerminal>(grammar.get(), bId);
     auto c = std::make_unique<RETerminal>(grammar.get(), cId);
-    
+
     auto bc_iter = REIteration::make(std::move(b), std::move(c));
     auto final = REIteration::make(std::move(a), std::move(bc_iter));
-    
+
     std::string result = final->toString(EmptyMask(), false);
-    EXPECT_NE(result.find('*'), std::string::npos);
+    EXPECT_NE(result.find('#'), std::string::npos);
 }
 
 TEST_F(REOperationsTest, MixedNonTerminalsAndTerminals) {

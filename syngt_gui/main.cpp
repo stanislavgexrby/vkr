@@ -150,7 +150,7 @@ static const syngt::RETree* s_extractCoverNode = nullptr; // pointer into active
 static bool showSemanticsWindow = false;
 
 // Editor state
-static int activeLeftTab = 1; // 0 = Grammar Editor, 1 = Syntax Diagram
+static int activeLeftTab = 0; // 0 = Syntax Diagram, 1 = Grammar Editor
 static bool isDragging = false;
 static ImVec2 lastMousePos;
 static float diagramScale = 1.0f;
@@ -2536,7 +2536,8 @@ static std::string GetFreeNonTerminalName() {
 // in the selection mask with the body of that NT.
 static std::unique_ptr<syngt::RETree> SubstituteInTree(
     const syngt::RETree* node,
-    const syngt::SelectionMask& sm)
+    const syngt::SelectionMask& sm,
+    bool& skippedEps)
 {
     if (!node) return nullptr;
 
@@ -2546,7 +2547,12 @@ static std::unique_ptr<syngt::RETree> SubstituteInTree(
             for (int id : sm) {
                 if (id == nt->drawObj()) {
                     syngt::NTListItem* item = grammar->getNTItem(nt->nameID());
-                    if (item && item->hasRoot()) return item->root()->copy();
+                    if (item && item->hasRoot()) {
+                        // Don't substitute eps rules (RETerminal with id==0)
+                        auto* epsCheck = dynamic_cast<const syngt::RETerminal*>(item->root());
+                        if (epsCheck && epsCheck->id() == 0) { skippedEps = true; break; }
+                        return item->root()->copy();
+                    }
                     break;
                 }
             }
@@ -2560,8 +2566,8 @@ static std::unique_ptr<syngt::RETree> SubstituteInTree(
         auto nodeCopy = node->copy();
         auto* bin = dynamic_cast<syngt::REBinaryOp*>(nodeCopy.get());
         if (bin) {
-            bin->setFirst(SubstituteInTree(node->left(), sm));
-            bin->setSecond(SubstituteInTree(node->right(), sm));
+            bin->setFirst(SubstituteInTree(node->left(), sm, skippedEps));
+            bin->setSecond(SubstituteInTree(node->right(), sm, skippedEps));
         }
         return nodeCopy;
     }
@@ -2659,7 +2665,8 @@ void Substitute() {
     }
 
     // Build a new RE tree with selected NT boxes replaced by their bodies
-    auto newRoot = SubstituteInTree(nt->root(), sm);
+    bool skippedEps = false;
+    auto newRoot = SubstituteInTree(nt->root(), sm, skippedEps);
     if (!newRoot) {
         ClearOutput();
         AppendOutput("Substitution produced empty rule!\n");
@@ -2682,6 +2689,8 @@ void Substitute() {
     SaveCurrentState();
 
     ClearOutput();
+    if (skippedEps)
+        AppendOutput("Note: some non-terminals have empty (eps) rules and were not substituted.\n");
     AppendOutput("Substitution applied!\n");
 }
 
@@ -3382,35 +3391,15 @@ int main(int, char**)
         
         float leftPanelHeight = ImGui::GetContentRegionAvail().y;
         static float ruleEditorHeight = 100.0f;
-        float upperPartHeight = (activeLeftTab == 1) 
+        float upperPartHeight = (activeLeftTab == 0)
             ? (leftPanelHeight - ruleEditorHeight - 8)
             : leftPanelHeight;
         
         ImGui::BeginChild("UpperLeftPanel", ImVec2(0, upperPartHeight), false);
         
         if (ImGui::BeginTabBar("LeftTabs")) {
-            if (ImGui::BeginTabItem("Grammar Editor")) {
-                activeLeftTab = 0;
-
-                ImGui::Text("Editor");
-                ImGui::SameLine();
-                if (ImGui::Button("Parse (F5)")) ParseGrammar();
-                ImGui::SameLine();
-                if (ImGui::Button("Clear")) { grammarText[0] = '\0'; ClearOutput(); }
-                
-                ImGui::Separator();
-                
-                ImGui::PushID(grammarWidgetVersion);
-                ImGui::InputTextMultiline("##grammar", grammarText, sizeof(grammarText),
-                                           ImVec2(-FLT_MIN, -FLT_MIN),
-                                           ImGuiInputTextFlags_AllowTabInput);
-                ImGui::PopID();
-                
-                ImGui::EndTabItem();
-            }
-            
             if (ImGui::BeginTabItem("Syntax Diagram")) {
-                activeLeftTab = 1;
+                activeLeftTab = 0;
 
                 if (grammar && !grammar->getNonTerminals().empty()) {
                     auto nts = grammar->getNonTerminals();
@@ -3817,13 +3806,31 @@ int main(int, char**)
                 
                 ImGui::EndTabItem();
             }
-            
+
+            if (ImGui::BeginTabItem("Grammar Editor")) {
+                activeLeftTab = 1;
+
+                ImGui::Text("Editor");
+                ImGui::SameLine();
+                if (ImGui::Button("Parse (F5)")) ParseGrammar();
+
+                ImGui::Separator();
+
+                ImGui::PushID(grammarWidgetVersion);
+                ImGui::InputTextMultiline("##grammar", grammarText, sizeof(grammarText),
+                                           ImVec2(-FLT_MIN, -FLT_MIN),
+                                           ImGuiInputTextFlags_AllowTabInput);
+                ImGui::PopID();
+
+                ImGui::EndTabItem();
+            }
+
             ImGui::EndTabBar();
         }
-        
+
         ImGui::EndChild();
         
-        if (activeLeftTab == 1) {
+        if (activeLeftTab == 0) {
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.8f, 0.8f, 1.0f));
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.7f, 0.7f, 0.7f, 1.0f));
             ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.6f, 0.6f, 0.6f, 1.0f));
@@ -3947,9 +3954,15 @@ int main(int, char**)
         ImGui::BeginChild("Output", ImVec2(0, 0), true);
         ImGui::Text("Output:");
         ImGui::Separator();
-        ImGui::InputTextMultiline("##output", outputText, sizeof(outputText),
-                                   ImVec2(-FLT_MIN, -FLT_MIN),
-                                   ImGuiInputTextFlags_ReadOnly);
+        ImGui::BeginChild("OutputScroll", ImVec2(0, 0), false, ImGuiWindowFlags_HorizontalScrollbar);
+        ImGui::TextWrapped("%s", outputText);
+        static size_t prevOutputLen = 0;
+        size_t curOutputLen = strlen(outputText);
+        if (curOutputLen != prevOutputLen) {
+            ImGui::SetScrollHereY(1.0f);
+            prevOutputLen = curOutputLen;
+        }
+        ImGui::EndChild();
         ImGui::EndChild();
         
         ImGui::EndChild();

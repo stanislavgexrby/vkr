@@ -44,7 +44,7 @@ std::string RETerminal::toString(const SelectionMask& mask, bool reverse) const 
     }
 
     if (name.empty()) {
-        return "@";
+        return "eps";
     }
 
     if (name == "ID" || name == "LETTER" || name == "DIGIT" || 

@@ -1,0 +1,8 @@
+{ Грамматика калькулятора с семантическими действиями. }
+
+expr    : term , @*( '+' , term , $add ; '-' , term , $sub ) .
+term    : factor , @*( '*' , factor , $mul ; '/' , factor , $div ) .
+factor  : '(' , expr , ')' ; number , $push ; '-' , factor , $neg .
+number  : 'DIGIT' , @*( 'DIGIT' , $digit ) .
+
+EOGram!

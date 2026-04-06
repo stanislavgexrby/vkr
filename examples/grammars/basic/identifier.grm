@@ -1,0 +1,8 @@
+{ Грамматика идентификатора }
+{ ID начинается с буквы, за которой идут буквы, цифры или '_' }
+
+identifier : letter , @*( letter ; digit ; '_' ) .
+letter     : 'LETTER' .
+digit      : 'DIGIT' .
+
+EOGram!
