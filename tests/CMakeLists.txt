@@ -21,8 +21,7 @@ if(NOT GTest_FOUND)
         GIT_SHALLOW TRUE   # fetch only the tagged commit, not full history
     )
     set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-    FetchContent_Populate(googletest)
-    add_subdirectory(${googletest_SOURCE_DIR} ${googletest_BINARY_DIR} EXCLUDE_FROM_ALL)
+    FetchContent_MakeAvailable(googletest)
     message(STATUS "Google Test ready: ${googletest_SOURCE_DIR}")
 endif()
 
