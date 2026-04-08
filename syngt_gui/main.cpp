@@ -2225,6 +2225,15 @@ void LoadFile() {
 void SaveFile() {
     std::string filename;
 
+    // If currentFile points to a GEdit source (.grw), don't overwrite it —
+    // treat it as "no file" and prompt for a new save location.
+    if (currentFile[0] != '\0') {
+        const char* ext = strrchr(currentFile, '.');
+        if (ext && (_stricmp(ext, ".grw") == 0)) {
+            currentFile[0] = '\0';
+        }
+    }
+
     if (currentFile[0] == '\0') {
         filename = SaveFileDialog();
         if (filename.empty()) return;
@@ -2776,7 +2785,7 @@ void ImportFromGEdit() {
             return;
         }
         strcpy_s(grammarText, sizeof(grammarText), imported.c_str());
-        currentFile[0] = '\0';
+        strcpy_s(currentFile, sizeof(currentFile), filename.c_str());
 
         ClearOutput();
         AppendOutput("Imported from GEdit: ");
@@ -2785,6 +2794,7 @@ void ImportFromGEdit() {
 
         undoRedo.clearData();
         ParseGrammar();
+        g_isDirty = false; // fresh import — no unsaved changes yet
 
     } catch (const std::exception& e) {
         ClearOutput();
@@ -3277,13 +3287,12 @@ int main(int, char**)
                 ImGui::Separator();
                 if (ImGui::MenuItem("Eliminate Left Recursion")) EliminateLeftRecursion();
                 if (ImGui::MenuItem("Eliminate Right Recursion")) EliminateRightRecursion();
-                if (ImGui::MenuItem("Regularize (Both)")) EliminateBothRecursions();
+                if (ImGui::MenuItem("Eliminate General Recursion")) EliminateBothRecursions();
                 if (ImGui::MenuItem("Minimize (DFA)")) MinimizeGrammar();
                 if (ImGui::MenuItem("Analyze Recursion")) AnalyzeRecursion();
                 ImGui::Separator();
                 if (ImGui::MenuItem("Extract Rule")) ExtractRule();
                 if (ImGui::MenuItem("Substitute")) Substitute();
-                if (ImGui::MenuItem("Remove Useless")) RemoveUselessSymbols();
                 ImGui::Separator();
                 if (ImGui::MenuItem("Toggle Macro")) ToggleMacro();
                 if (ImGui::MenuItem("Open All Macros")) OpenAllMacros();
@@ -3851,12 +3860,17 @@ int main(int, char**)
             ImGui::BeginChild("RuleEditor", ImVec2(0, 0), true);
             ImGui::Text("Rule definition:");
             ImGui::PushItemWidth(-FLT_MIN);
-            ImGui::InputText("##rule_edit", ruleText, sizeof(ruleText), ImGuiInputTextFlags_EnterReturnsTrue);
+            float ruleInputHeight = ImGui::GetContentRegionAvail().y
+                                    - ImGui::GetFrameHeightWithSpacing() - ImGui::GetStyle().ItemSpacing.y;
+            if (ruleInputHeight < 40.0f) ruleInputHeight = 40.0f;
+            ImGui::InputTextMultiline("##rule_edit", ruleText, sizeof(ruleText),
+                                      ImVec2(-FLT_MIN, ruleInputHeight),
+                                      ImGuiInputTextFlags_AllowTabInput);
             if (ImGui::IsItemDeactivatedAfterEdit()) {
                 BuildRule();
             }
             ImGui::PopItemWidth();
-            
+
             if (ImGui::Button("Build (Apply Changes)", ImVec2(-FLT_MIN, 0))) {
                 BuildRule();
             }
@@ -3898,7 +3912,7 @@ int main(int, char**)
         if (ImGui::Button("Eliminate Right Recursion", ImVec2(-FLT_MIN, 0))) {
             EliminateRightRecursion();
         }
-        if (ImGui::Button("Regularize (Both)", ImVec2(-FLT_MIN, 0))) {
+        if (ImGui::Button("Eliminate General Recursion", ImVec2(-FLT_MIN, 0))) {
             EliminateBothRecursions();
         }
         if (ImGui::Button("Minimize (DFA)", ImVec2(-FLT_MIN, 0))) {
@@ -3913,9 +3927,6 @@ int main(int, char**)
         if (ImGui::Button("Substitute", ImVec2(-FLT_MIN, 0))) {
             Substitute();
         }
-        if (ImGui::Button("Remove Useless", ImVec2(-FLT_MIN, 0))) {
-            RemoveUselessSymbols();
-        }
         ImGui::Separator();
         ImGui::Text("Macros");
         if (ImGui::Button("Toggle Macro", ImVec2(-FLT_MIN, 0))) {
@@ -3928,6 +3939,7 @@ int main(int, char**)
             CloseAllDefinitions();
         }
         ImGui::Separator();
+        ImGui::Text("Semantics");
         if (ImGui::Button("Semantics...", ImVec2(-FLT_MIN, 0))) {
             showSemanticsWindow = !showSemanticsWindow;
         }
@@ -4146,67 +4158,37 @@ int main(int, char**)
 
             if (ImGui::BeginTable("RecTable", 5,
                                   ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
-                                  ImGuiTableFlags_SizingFixedFit)) {
-                ImGui::TableSetupColumn("Nonterminal", ImGuiTableColumnFlags_WidthStretch);
-                ImGui::TableSetupColumn("Left rec.");
-                ImGui::TableSetupColumn("General rec.");
-                ImGui::TableSetupColumn("Right rec.");
-                ImGui::TableSetupColumn("Actions");
+                                  ImGuiTableFlags_SizingFixedFit |
+                                  ImGuiTableFlags_ScrollX | ImGuiTableFlags_ScrollY,
+                                  ImVec2(0, 300))) {
+                ImGui::TableSetupScrollFreeze(0, 1);
+                ImGui::TableSetupColumn("Nonterminal", ImGuiTableColumnFlags_WidthFixed, 110);
+                ImGui::TableSetupColumn("Rule", ImGuiTableColumnFlags_WidthStretch);
+                ImGui::TableSetupColumn("Left rec.", ImGuiTableColumnFlags_WidthFixed, 80);
+                ImGui::TableSetupColumn("General rec.", ImGuiTableColumnFlags_WidthFixed, 90);
+                ImGui::TableSetupColumn("Right rec.", ImGuiTableColumnFlags_WidthFixed, 80);
                 ImGui::TableHeadersRow();
 
                 for (const auto& r : recursionResults) {
                     ImGui::TableNextRow();
-
-                    ImGui::TableSetColumnIndex(0);
-                    ImGui::TextUnformatted(r.name.c_str());
 
                     auto showCell = [&](const std::string& val) {
                         std::string label = val.empty() ? "none" : val;
                         ImGui::TextColored(colorForType(val), "%s", label.c_str());
                     };
 
-                    ImGui::TableSetColumnIndex(1); showCell(r.leftRecursion);
-                    ImGui::TableSetColumnIndex(2); showCell(r.anyRecursion);
-                    ImGui::TableSetColumnIndex(3); showCell(r.rightRecursion);
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::TextUnformatted(r.name.c_str());
 
-                    ImGui::TableSetColumnIndex(4);
-                    bool hasAction = false;
-
-                    // Elim L — only meaningful for direct left recursion
-                    if (r.leftRecursion == "direct") {
-                        if (ImGui::SmallButton(("Elim L##" + r.name).c_str())) {
-                            syngt::NTListItem* nt = grammar->getNTItem(r.name);
-                            if (nt) {
-                                syngt::LeftElimination::eliminateForNonTerminal(nt, grammar.get());
-                                UpdateGrammarText();
-                                ClearDiagramLayouts();
-                                UpdateDiagram();
-                                SaveCurrentState();
-                                needRefresh = true;
-                            }
-                        }
-                        hasAction = true;
+                    ImGui::TableSetColumnIndex(1);
+                    if (grammar) {
+                        syngt::NTListItem* nt = grammar->getNTItem(r.name);
+                        if (nt) ImGui::TextUnformatted(nt->value().c_str());
                     }
 
-                    // Elim R — only meaningful for direct right recursion
-                    if (r.rightRecursion == "direct") {
-                        if (hasAction) ImGui::SameLine();
-                        if (ImGui::SmallButton(("Elim R##" + r.name).c_str())) {
-                            syngt::NTListItem* nt = grammar->getNTItem(r.name);
-                            if (nt) {
-                                syngt::RightElimination::eliminateForNonTerminal(nt, grammar.get());
-                                UpdateGrammarText();
-                                ClearDiagramLayouts();
-                                UpdateDiagram();
-                                SaveCurrentState();
-                                needRefresh = true;
-                            }
-                        }
-                    }
-
-                    if (r.leftRecursion.empty() && r.rightRecursion.empty()) {
-                        ImGui::TextDisabled("-");
-                    }
+                    ImGui::TableSetColumnIndex(2); showCell(r.leftRecursion);
+                    ImGui::TableSetColumnIndex(3); showCell(r.anyRecursion);
+                    ImGui::TableSetColumnIndex(4); showCell(r.rightRecursion);
                 }
                 ImGui::EndTable();
             }
@@ -4215,8 +4197,6 @@ int main(int, char**)
                 RefreshRecursionResults();
             }
 
-            ImGui::Separator();
-            ImGui::TextDisabled("Tip: use Eliminate Left/Right Recursion for indirect recursion.");
             ImGui::Separator();
             if (ImGui::Button("Refresh")) RefreshRecursionResults();
             ImGui::SameLine();
@@ -4371,13 +4351,23 @@ int main(int, char**)
         if (showAbout) {
             ImGui::OpenPopup("About");
             if (ImGui::BeginPopupModal("About", &showAbout, ImGuiWindowFlags_AlwaysAutoResize)) {
-                ImGui::Text("SynGT - Syntax Grammar Transformation Tool");
-                ImGui::Text("Version 1.0.0");
+                ImGui::Text("SynGT - Syntax Diagram Generator and Transformer");
                 ImGui::Separator();
-                ImGui::Text("A tool for working with formal grammars and syntax diagrams.");
-                ImGui::Text("Ported from Delphi to C++17 with Dear ImGui.");
+                ImGui::Text("A tool for editing and visualizing formal grammars");
+                ImGui::Text("as syntax diagrams (railroad diagrams).");
+                ImGui::Spacing();
+                ImGui::Text("Features:");
+                ImGui::BulletText("Edit RBNF grammars with live diagram preview");
+                ImGui::BulletText("Import grammars from GEdit (.grw) format");
+                ImGui::BulletText("Left / right / general recursion elimination");
+                ImGui::BulletText("DFA minimization, LL(1) parsing table analysis");
+                ImGui::BulletText("Extract rule, substitute, macro expansion");
+                ImGui::BulletText("Semantic actions support");
+                ImGui::Spacing();
+                ImGui::Text("Originally developed in Pascal (Delphi).");
+                ImGui::Text("Ported to C++17 with Dear ImGui.");
                 ImGui::Separator();
-                if (ImGui::Button("Close")) showAbout = false;
+                if (ImGui::Button("Close", ImVec2(120, 0))) showAbout = false;
                 ImGui::EndPopup();
             }
         }

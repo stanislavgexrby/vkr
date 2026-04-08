@@ -54,15 +54,14 @@ bool isLetterOrDigit(char ch) {
 std::string readIdentifier(CharProducer* producer) {
     skipSpaces(producer);
     std::string name;
-    
+
     char ch = producer->currentChar();
     while (isLetterOrDigit(ch) && !producer->isEnd()) {
         name += ch;
         producer->next();
-        skipSpaces(producer);
         ch = producer->currentChar();
     }
-    
+
     return name;
 }
 

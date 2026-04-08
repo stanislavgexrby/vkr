@@ -350,7 +350,12 @@ DrawObject* REIteration::drawObjectsToRight(
     
     DrawObjectPoint* rightPtr = rightPoint.get();
     list->add(std::move(rightPoint));
-    
+
+    // Pascal DrawObjectsToDown alignment: SecondLastDO.x := result.x when smaller
+    if (secondEndPtr->x() < rightPtr->x()) {
+        secondEndPtr->setPosition(rightPtr->x(), downY);
+    }
+
     int cy = std::max(height1, ElementHalfHeight) + VerticalSpace;
     if (height2 > 0) {
         cy += height2;

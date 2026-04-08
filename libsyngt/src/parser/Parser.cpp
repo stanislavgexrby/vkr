@@ -256,15 +256,14 @@ void Parser::skipToChar(char ch) {
 std::string Parser::readIdentifier() {
     skipSpaces();
     std::string name;
-    
+
     char ch = m_producer->currentChar();
     while (isLetterOrDigit(ch) && !m_producer->isEnd()) {
         name += ch;
         m_producer->next();
-        skipSpaces();
         ch = m_producer->currentChar();
     }
-    
+
     return name;
 }
 
