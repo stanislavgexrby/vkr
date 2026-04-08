@@ -9,16 +9,21 @@ set(TESTS_TIMEOUT "30" CACHE STRING "Test timeout in seconds")
 # Find or download Google Test
 find_package(GTest QUIET)
 if(NOT GTest_FOUND)
-    message(STATUS "Google Test not found, downloading...")
     include(FetchContent)
+
+    # Do not re-fetch on every configure once already downloaded
+    set(FETCHCONTENT_UPDATES_DISCONNECTED ON CACHE BOOL "" FORCE)
+
     FetchContent_Declare(
         googletest
         GIT_REPOSITORY https://github.com/google/googletest.git
         GIT_TAG v1.14.0
+        GIT_SHALLOW TRUE   # fetch only the tagged commit, not full history
     )
     set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-    FetchContent_MakeAvailable(googletest)
-    message(STATUS "Google Test downloaded successfully")
+    FetchContent_Populate(googletest)
+    add_subdirectory(${googletest_SOURCE_DIR} ${googletest_BINARY_DIR} EXCLUDE_FROM_ALL)
+    message(STATUS "Google Test ready: ${googletest_SOURCE_DIR}")
 endif()
 
 enable_testing()
