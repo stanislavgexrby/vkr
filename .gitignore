@@ -9,6 +9,7 @@ build-wsl/
 .claude/
 .vscode/
 .idea/
+SynGT16may/
 *.user
 *.suo
 *.sln
