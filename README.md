@@ -28,11 +28,6 @@ sudo dnf install gcc-c++ cmake ninja-build \
                  glfw-devel mesa-libGL-devel git
 ```
 
-**macOS:**
-```bash
-brew install cmake ninja glfw
-```
-
 # Clone repository
 ```bash
 git clone https://github.com/stanislavgexrby/vkr.git
@@ -54,7 +49,7 @@ chmod +x setup.sh
 
 # Build
 
-**Wiith GUI:**
+**With GUI:**
 ```bash
 cmake -B build -G Ninja -DBUILD_GUI=ON
 cd build
@@ -83,7 +78,7 @@ ctest --output-on-failure
 build\bin\syngt_gui.exe
 ```
 
-**Linux/macOS:**
+**Linux:**
 ```bash
 ./build/bin/syngt_gui
 ```
