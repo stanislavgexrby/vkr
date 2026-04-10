@@ -27,6 +27,7 @@ SynGT16may/
 
 # git
 syngt_gui/imgui
+.github
 
 # Logs
 *.log
