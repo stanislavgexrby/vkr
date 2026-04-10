@@ -1,4 +1,4 @@
-#include <syngt/analysis/DFAToRegex.h>
+#include <syngt/analysis/DFAToREGEX.h>
 #include <syngt/core/Grammar.h>
 #include <syngt/regex/RETree.h>
 #include <syngt/regex/RETerminal.h>
