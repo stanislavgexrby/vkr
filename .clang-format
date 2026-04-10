@@ -1,0 +1,15 @@
+BasedOnStyle: Google
+IndentWidth: 4
+ColumnLimit: 120
+AccessModifierOffset: -4
+ConstructorInitializerIndentWidth: 4
+ContinuationIndentWidth: 4
+AlignAfterOpenBracket: Align
+BraceWrapping:
+  AfterClass: false
+  AfterFunction: false
+  AfterNamespace: false
+BreakBeforeBraces: Attach
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: Never
+SortIncludes: false
