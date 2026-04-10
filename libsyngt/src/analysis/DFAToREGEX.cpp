@@ -8,6 +8,7 @@
 #include <syngt/regex/REAnd.h>
 #include <syngt/regex/REIteration.h>
 #include <algorithm>
+#include <climits>
 #include <stdexcept>
 
 namespace {
