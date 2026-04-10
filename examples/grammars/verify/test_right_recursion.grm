@@ -1,0 +1,11 @@
+{ Тест: устранение правой рекурсии. }
+{ Grammar -> Eliminate Right Recursion }
+{ }
+{ Ожидаемый результат: }
+{ list : @*( item , ',' ) , item . }
+{ item : 'LETTER' . }
+
+list : item , ',' , list ; item .
+item : 'LETTER' .
+
+EOGram!

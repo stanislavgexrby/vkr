@@ -1,0 +1,11 @@
+{ Тест: устранение левой рекурсии. }
+{ Grammar -> Eliminate Left Recursion }
+{ }
+{ Ожидаемый результат: }
+{ expr : term , @*( '+' , term ) . }
+{ term : 'DIGIT' . }
+
+expr : expr , '+' , term ; term .
+term : 'DIGIT' .
+
+EOGram!

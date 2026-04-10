@@ -1,0 +1,13 @@
+{ Тест: семантические действия. }
+{ Grammar -> Semantics... }
+{ }
+{ 1. Список должен показывать: $add $sub $mul $div $push $neg }
+{ 2. Добавьте "$myaction" -> должна появиться в списке. }
+{ 3. Удалите "$myaction" -> должна исчезнуть из списка. }
+{ 4. На диаграмме семантики отображаются как метки на стрелках. }
+
+expr   : term , @*( '+' , term , $add ; '-' , term , $sub ) .
+term   : factor , @*( '*' , factor , $mul ; '/' , factor , $div ) .
+factor : '(' , expr , ')' ; 'DIGIT' , $push ; '-' , factor , $neg .
+
+EOGram!

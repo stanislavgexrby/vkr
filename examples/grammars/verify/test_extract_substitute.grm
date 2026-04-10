@@ -1,0 +1,19 @@
+{ Тест: Extract Rule и Substitute. }
+{ }
+{ Extract Rule: }
+{ Выделите на диаграмме 'a' , 'b' в правиле S. }
+{ Grammar -> Extract Rule, введите имя "ab". }
+{ Ожидаемый результат: }
+{ S : ab , 'c' . }
+{ ab : 'a' , 'b' . }
+{ }
+{ Substitute: }
+{ Выделите ссылку на "part" в диаграмме S. }
+{ Grammar -> Substitute. }
+{ Ожидаемый результат: вместо part в S подставится 'x' ; 'y'. }
+{ S : 'a' , 'b' , 'c' . (если применять к S целиком) }
+
+S : 'a' , 'b' , 'c' .
+part : 'x' ; 'y' .
+
+EOGram!

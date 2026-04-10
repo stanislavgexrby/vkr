@@ -1,0 +1,17 @@
+{ Тест: анализ рекурсий. }
+{ Grammar -> Analyze Recursion }
+{ }
+{ Ожидаемая таблица: }
+{ left_direct  : Left=direct,   General=direct,   Right=        }
+{ right_direct : Left=          General=direct,   Right=direct  }
+{ indirect_a   : Left=indirect, General=indirect, Right=        }
+{ indirect_b   : Left=indirect, General=indirect, Right=        }
+{ no_rec       : Left=          General=          Right=        }
+
+left_direct  : left_direct , 'x' ; 'a' .
+right_direct : 'b' , right_direct ; 'c' .
+indirect_a   : indirect_b , 'p' ; 'q' .
+indirect_b   : indirect_a , 'r' ; 's' .
+no_rec       : 'LETTER' , @*( 'DIGIT' ) .
+
+EOGram!
