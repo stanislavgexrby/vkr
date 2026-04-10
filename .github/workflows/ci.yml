@@ -26,7 +26,7 @@ jobs:
             cxx: clang++
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.2.2
 
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y cmake ninja-build
@@ -54,7 +54,7 @@ jobs:
     continue-on-error: true   # advisory: reports diff but does not block CI
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.2.2
 
       - name: Install clang-format
         run: sudo apt-get update && sudo apt-get install -y clang-format
