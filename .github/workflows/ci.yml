@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build-and-test:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux / GCC
+            os: ubuntu-22.04
+            cc: gcc
+            cxx: g++
+
+          - name: Linux / Clang
+            os: ubuntu-22.04
+            cc: clang
+            cxx: clang++
+
+    steps:
+      - uses: actions/checkout@v4.2.2
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build
+
+      - name: Configure
+        env:
+          CC: ${{ matrix.cc }}
+          CXX: ${{ matrix.cxx }}
+        run: |
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_GUI=OFF \
+            -DBUILD_CLI=ON \
+            -DBUILD_TESTS=ON
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure --parallel 4
+
+  lint:
+    name: clang-format
+    runs-on: ubuntu-22.04
+    continue-on-error: true   # advisory: reports diff but does not block CI
+
+    steps:
+      - uses: actions/checkout@v4.2.2
+
+      - name: Install clang-format
+        run: sudo apt-get update && sudo apt-get install -y clang-format
+
+      - name: Check formatting
+        run: |
+          find libsyngt/src libsyngt/include syngt_cli \
+            -name '*.cpp' -o -name '*.h' | \
+          xargs clang-format --dry-run 2>&1 || true
